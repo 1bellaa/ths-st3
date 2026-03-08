@@ -72,7 +72,25 @@ SKIP_ML         = config.get("skip_ml",         False)
 if SKIP_ASSEMBLY or SKIP_ANNOTATION:
     SKIP_PANGENOME = True
 
-ML_INPUT_TYPES = ["snp"] if SKIP_PANGENOME else ["snp", "pan", "snp_pan"]
+# Samples for CARD screening — read from existing input_snp.csv if available,
+# otherwise fall back to SAMPLES (full pipeline run)
+_input_snp_path = Path(config["results_dir"]) / "ml" / "input_snp.csv"
+if _input_snp_path.exists():
+    import pandas as _pd
+    CARD_SAMPLES = list(_pd.read_csv(_input_snp_path, index_col=0).index.astype(str))
+    print(f"📊 CARD_SAMPLES loaded from input_snp.csv: {len(CARD_SAMPLES)} samples")
+else:
+    CARD_SAMPLES = SAMPLES
+    print(f"📊 CARD_SAMPLES using SAMPLES: {len(CARD_SAMPLES)} samples")
+
+if SKIP_PANGENOME and SKIP_CARD:
+    ML_INPUT_TYPES = ["snp"]
+elif SKIP_PANGENOME and not SKIP_CARD:
+    ML_INPUT_TYPES = ["snp", "card", "snp_card"]
+elif not SKIP_PANGENOME and SKIP_CARD:
+    ML_INPUT_TYPES = ["snp", "pan", "snp_pan"]
+else:
+    ML_INPUT_TYPES = ["snp", "pan", "snp_pan", "card", "snp_card", "pan_card", "snp_pan_card"]
 
 # LOAD SAMPLES 
 # Strategy:
@@ -157,7 +175,7 @@ print(f"   Sample→isolate map written to {_map_path}")
 wildcard_constraints:
     sample     = r"[A-Za-z0-9]+",
     drug       = r"[a-z]+",
-    input_type = r"snp|pan|snp_pan",
+    input_type = r"snp|pan|snp_pan|card|snp_card|pan_card|snp_pan_card",
     model      = r"rf|lr",
 
 
@@ -166,9 +184,9 @@ def card_targets():
     if SKIP_CARD:
         return []
     return (
-        expand(str(CARD_DIR / "{sample}.card_coverage.txt"), sample=SAMPLES)
-        + [str(RESULTS_DIR / "card_summary.csv"),
-           str(RESULTS_DIR / "card_binary_matrix.csv")]
+        expand(str(CARD_DIR / "{sample}.card_coverage.txt"), sample=CARD_SAMPLES)
+        + [str(RESULTS_DIR / "card_summary.csv")]
+        + [str(RESULTS_DIR / "card_binary_matrix.csv")]
     )
 
 def assembly_targets():
@@ -269,10 +287,31 @@ rule preprocess_sample:
 # CARD BAM is temp() — deleted after coverage file is written.
 # ===========================================================
 if not SKIP_CARD:
+    rule download_fastq_for_card:
+        """Download FASTQ only for CARD screening (uses CARD_SAMPLES from input_snp.csv).
+        FASTQs are temp() — deleted automatically after card_screen finishes."""
+        output:
+            r1   = temp(FASTQ_DIR / ".card" / "{sample}_1.fastq.gz"),
+            r2   = temp(FASTQ_DIR / ".card" / "{sample}_2.fastq.gz"),
+            done = touch(FASTQ_DIR / ".card" / ".{sample}.done"),
+        params:
+            sample        = "{sample}",
+            metadata_file = METADATA,
+        log:
+            LOGS_DIR / "download_card" / "{sample}.log",
+        threads: 1
+        retries: 3
+        resources:
+            downloads = 1,
+        conda:
+            "workflow/envs/download.yaml"
+        script:
+            "workflow/scripts/download.py"
+
     rule card_screen:
         input:
-            r1 = FASTQ_DIR / "{sample}_1.fastq.gz",
-            r2 = FASTQ_DIR / "{sample}_2.fastq.gz",
+            r1 = FASTQ_DIR / ".card" / "{sample}_1.fastq.gz",
+            r2 = FASTQ_DIR / ".card" / "{sample}_2.fastq.gz",
         output:
             bam      = temp(CARD_DIR / "{sample}.card.bam"),
             coverage = CARD_DIR / "{sample}.card_coverage.txt",
@@ -282,6 +321,8 @@ if not SKIP_CARD:
         log:
             LOGS_DIR / "card" / "{sample}.log",
         threads: config.get("bowtie2_threads", 4)
+        resources:
+            mem_mb = config.get("card_mem_mb", 4000),
         conda:
             "workflow/envs/card.yaml"
         shell:
@@ -301,7 +342,7 @@ if not SKIP_CARD:
 
     rule summarize_card:
         input:
-            expand(str(CARD_DIR / "{sample}.card_coverage.txt"), sample=SAMPLES),
+            expand(str(CARD_DIR / "{sample}.card_coverage.txt"), sample=CARD_SAMPLES),
         output:
             summary       = RESULTS_DIR / "card_summary.csv",
             binary_matrix = RESULTS_DIR / "card_binary_matrix.csv",
@@ -506,6 +547,11 @@ def _merge_inputs(wildcards):
         if not SKIP_PANGENOME
         else str(ML_DIR / "snp_matrix_filtered.csv")
     )
+    d["card_matrix"] = (
+        str(RESULTS_DIR / "card_binary_matrix.csv")
+        if not SKIP_CARD
+        else str(ML_DIR / "snp_matrix_filtered.csv")
+    )
     return d
 
 
@@ -513,14 +559,17 @@ rule merge_metadata:
     input:
         unpack(_merge_inputs),
     output:
-        snp             = ML_DIR / "input_snp.csv",
-        pan             = ML_DIR / "input_pan.csv",
-        snp_pan         = ML_DIR / "input_snp_pan.csv",
-        country_plot    = RESULTS_DIR / "country_distribution.png",
-        resistance_plot = RESULTS_DIR / "resistance_summary.png",
+        snp         = ML_DIR / "input_snp.csv",
+        pan         = ML_DIR / "input_pan.csv",
+        snp_pan     = ML_DIR / "input_snp_pan.csv",
+        card        = ML_DIR / "input_card.csv",
+        snp_card    = ML_DIR / "input_snp_card.csv",
+        pan_card    = ML_DIR / "input_pan_card.csv",
+        snp_pan_card = ML_DIR / "input_snp_pan_card.csv",
     params:
         drugs          = DRUGS,
         skip_pangenome = SKIP_PANGENOME,
+        skip_card      = SKIP_CARD,
     log:   LOGS_DIR / "merge_metadata.log"
     conda: "workflow/envs/ml.yaml"
     script: "workflow/scripts/merge_metadata.py"

@@ -37,6 +37,8 @@ from sklearn.metrics import (
 )
 from sklearn.model_selection import RandomizedSearchCV, train_test_split
 from sklearn.preprocessing import MaxAbsScaler
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
 
 warnings.filterwarnings("ignore")
 
@@ -73,7 +75,7 @@ msg(f"📥 Loading {input_type} data for {drug} ({model_type.upper()})...")
 df = pd.read_csv(data_path, index_col=0, low_memory=False)
 
 # CLEAN DATA
-df = df.replace("", 0).fillna(0)
+df = df.replace("", np.nan)
 if TARGET_COL not in df.columns:
     msg(f"❌ Target column '{TARGET_COL}' not found in data. Skipping.")
     # Write empty placeholder outputs so Snakemake does not fail
@@ -84,9 +86,6 @@ if TARGET_COL not in df.columns:
     plt.figure(); plt.title("No data"); plt.savefig(out_split_dist); plt.close()
     log.close()
     sys.exit(0)
-
-df = df.dropna(subset=[TARGET_COL])
-df[TARGET_COL] = df[TARGET_COL].astype(int)
 
 # ONE-HOT ENCODING OF CATEGORICAL METADATA (e.g. country) 
 if "country" in df.columns:
@@ -201,32 +200,34 @@ def calc_metrics(y_true, y_pred, y_proba):
 
 # TRAIN MODELS
 if model_type == "rf":
+    imputer = SimpleImputer(strategy='constant', fill_value=-1)
+    rf = RandomForestClassifier(random_state=RANDOM_STATE, n_jobs=-1)
+    base_model = Pipeline([('imputer', imputer), ('rf', rf)])
     param_dist = {
-        "n_estimators":     [50, 100, 200],
-        "max_depth":        [2, 5, 10, None],
-        "min_samples_split":[2, 5],
-        "min_samples_leaf": [1, 2],
-        "bootstrap":        [True],
-        "max_features":     ["sqrt", "log2", None],
-        "class_weight":     ["balanced"],
+        "rf__n_estimators":     [50, 100, 200],
+        "rf__max_depth":        [2, 5, 10, None],
+        "rf__min_samples_split":[2, 5],
+        "rf__min_samples_leaf": [1, 2],
+        "rf__bootstrap":        [True],
+        "rf__max_features":     ["sqrt", "log2", None],
+        "rf__class_weight":     ["balanced"],
     }
-    base_model = RandomForestClassifier(random_state=RANDOM_STATE, n_jobs=-1)
     X_tr, X_v, X_te = X_train, X_val, X_test
 
 else:  # lr
-    param_dist = {
-        "C":            loguniform(1e-2, 1e2),
-        "penalty":      ["l1", "l2", "elasticnet"],
-        "solver":       ["saga"],
-        "l1_ratio":     uniform(0, 1),
-        "max_iter":     [100], # 500, 100 ---girl edit this later ‼️‼️‼️
-        "class_weight": ["balanced"],
-    }
+    imputer = SimpleImputer(strategy='constant', fill_value=-1)
     scaler = MaxAbsScaler()
-    X_tr   = scaler.fit_transform(X_train)
-    X_v    = scaler.transform(X_val)
-    X_te   = scaler.transform(X_test)
-    base_model = LogisticRegression(random_state=RANDOM_STATE)
+    lr = LogisticRegression(random_state=RANDOM_STATE)
+    base_model = Pipeline([('imputer', imputer), ('scaler', scaler), ('lr', lr)])
+    param_dist = {
+        "lr__C":            loguniform(1e-2, 1e2),
+        "lr__penalty":      ["l1", "l2", "elasticnet"],
+        "lr__solver":       ["saga"],
+        "lr__l1_ratio":     uniform(0, 1),
+        "lr__max_iter":     [100], # 500, 100 ---girl edit this later ‼️‼️‼️
+        "lr__class_weight": ["balanced"],
+    }
+    X_tr, X_v, X_te = X_train, X_val, X_test
 
 msg(f"🔧 Training {model_type.upper()} with {N_ITER} iter × {CV_FOLDS}-fold CV...")
 search = RandomizedSearchCV(
@@ -262,10 +263,10 @@ for split_name, (Xs, ys) in sets.items():
 # FEATURE IMPORTANCE
 feat_names = list(feature_names)
 if model_type == "rf":
-    importances = best.feature_importances_
+    importances = best.named_steps['rf'].feature_importances_
     imp_label   = "Importance"
 else:
-    importances = best.coef_.flatten()
+    importances = best.named_steps['lr'].coef_.flatten()
     imp_label   = "Coefficient"
 
 top_idx      = np.argsort(np.abs(importances))[::-1][:10]

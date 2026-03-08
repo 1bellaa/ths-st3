@@ -23,6 +23,8 @@ Outputs:
   input_snp_pan.csv   Combined features + labels + country (empty if skipped)
   country_distribution.png   — pie chart of sample countries
   resistance_summary.png     — table image of R/S/no_label counts per drug
+  country_distribution.png   — pie chart of sample countries
+  resistance_summary.png     — table image of R/S/no_label counts per drug
 """
 
 from pathlib import Path
@@ -36,16 +38,22 @@ import matplotlib.patches as mpatches
 # ── Snakemake bindings ────────────────────────────────────────────────────────
 snp_matrix_path    = snakemake.input.snp_matrix
 pan_matrix_path    = snakemake.input.pan_matrix
+card_matrix_path   = snakemake.input.card_matrix
 metadata_file      = snakemake.input.metadata
 master_data_file   = snakemake.input.master_data
 sample_isolate_map = snakemake.input.sample_isolate_map
 out_snp            = snakemake.output.snp
 out_pan            = snakemake.output.pan
 out_snp_pan        = snakemake.output.snp_pan
+out_card           = snakemake.output.card
+out_snp_card       = snakemake.output.snp_card
+out_pan_card       = snakemake.output.pan_card
+out_snp_pan_card   = snakemake.output.snp_pan_card
 out_country_plot   = snakemake.output.country_plot
 out_resistance_plot= snakemake.output.resistance_plot
 drugs              = snakemake.params.drugs
 skip_pangenome     = snakemake.params.skip_pangenome
+skip_card          = snakemake.params.skip_card
 log_file           = snakemake.log[0]
 
 Path(log_file).parent.mkdir(parents=True, exist_ok=True)
@@ -168,20 +176,33 @@ Path(out_country_plot).parent.mkdir(parents=True, exist_ok=True)
 
 if "country" in labels_df.columns and labels_df["country"].notna().any():
     country_counts = labels_df["country"].value_counts()
-    fig, ax = plt.subplots(figsize=(7, 7))
+
+    # Group into Top 10 + Others
+    if len(country_counts) > 10:
+        top10  = country_counts.iloc[:10]
+        others = pd.Series({"Others": country_counts.iloc[10:].sum()})
+        country_counts = pd.concat([top10, others])
+
+    n_slices = len(country_counts)
+    cmap     = plt.cm.RdYlBu_r
+    colors   = [cmap(i / max(n_slices - 1, 1)) for i in range(n_slices)]
+    if "Others" in country_counts.index:
+        colors[-1] = "#cccccc"
+
+    fig, ax = plt.subplots(figsize=(8, 7))
     wedges, texts, autotexts = ax.pie(
         country_counts.values,
         labels=country_counts.index,
         autopct="%1.1f%%",
         startangle=140,
         pctdistance=0.82,
-        colors=plt.cm.Set3.colors[:len(country_counts)],
+        colors=colors,
         wedgeprops={"edgecolor": "white", "linewidth": 1.2},
     )
     for t in autotexts:
         t.set_fontsize(9)
     ax.set_title(
-        f"Country Distribution  (n={len(labels_df)})",
+        f"Country Distribution  (Top 10 + Others,  n={len(labels_df)})",
         fontweight="bold", fontsize=13, pad=16,
     )
     plt.tight_layout()
@@ -239,11 +260,33 @@ else:
     plt.savefig(out_resistance_plot, dpi=120, bbox_inches="tight")
     plt.close()
 
-# ── 9. Build and write output CSVs ────────────────────────────────────────────
+# ── 9. Load CARD binary matrix ───────────────────────────────────────────────
+if not skip_card:
+    msg(f"\n📋 Loading CARD binary matrix: {card_matrix_path}")
+    card_df = pd.read_csv(card_matrix_path, index_col=0)
+    card_df.index = card_df.index.astype(str).str.strip()
+    # Rename columns to avoid clashes with SNP/pan feature names
+    card_df.columns = [f"CARD_{c}" for c in card_df.columns]
+    msg(f"   CARD matrix: {card_df.shape[0]} samples × {card_df.shape[1]} genes")
+else:
+    card_df = None
+    msg("\n⏭️  CARD skipped")
+
+# ── 10. Build and write output CSVs ───────────────────────────────────────────
 def build_output(matrix_df, label):
     merged = matrix_df.join(labels_df, how="left")
     msg(f"   {label}: {merged.shape[0]} rows × {merged.shape[1]} cols")
     return merged
+
+def combine(*dfs):
+    """Inner-join multiple feature matrices on their common samples."""
+    common = dfs[0].index
+    for df in dfs[1:]:
+        common = common.intersection(df.index)
+    if len(common) == 0:
+        msg("   ⚠️  No common samples across matrices")
+        return pd.DataFrame()
+    return pd.concat([df.loc[common] for df in dfs], axis=1)
 
 Path(out_snp).parent.mkdir(parents=True, exist_ok=True)
 
@@ -258,13 +301,30 @@ else:
     msg("\n💾 Writing input_pan.csv...")
     build_output(pan_df, "Pangenome").to_csv(out_pan)
     msg("\n💾 Writing input_snp_pan.csv...")
-    common = snp_df.index.intersection(pan_df.index)
-    if len(common) == 0:
-        msg("   ⚠️  No common samples between SNP and pangenome matrices")
-        pd.DataFrame().to_csv(out_snp_pan)
+    build_output(combine(snp_df, pan_df), "SNP+Pan").to_csv(out_snp_pan)
+
+if skip_card:
+    msg("\n⏭️  CARD skipped — writing empty placeholders")
+    pd.DataFrame().to_csv(out_card)
+    pd.DataFrame().to_csv(out_snp_card)
+    pd.DataFrame().to_csv(out_pan_card)
+    pd.DataFrame().to_csv(out_snp_pan_card)
+else:
+    msg("\n💾 Writing input_card.csv...")
+    build_output(card_df, "CARD").to_csv(out_card)
+
+    msg("\n💾 Writing input_snp_card.csv...")
+    build_output(combine(snp_df, card_df), "SNP+CARD").to_csv(out_snp_card)
+
+    if skip_pangenome:
+        msg("\n⏭️  pan_card / snp_pan_card skipped (no pangenome)")
+        pd.DataFrame().to_csv(out_pan_card)
+        pd.DataFrame().to_csv(out_snp_pan_card)
     else:
-        combined = pd.concat([snp_df.loc[common], pan_df.loc[common]], axis=1)
-        build_output(combined, "SNP+Pan").to_csv(out_snp_pan)
+        msg("\n💾 Writing input_pan_card.csv...")
+        build_output(combine(pan_df, card_df), "Pan+CARD").to_csv(out_pan_card)
+        msg("\n💾 Writing input_snp_pan_card.csv...")
+        build_output(combine(snp_df, pan_df, card_df), "SNP+Pan+CARD").to_csv(out_snp_pan_card)
 
 msg("\n🎉 Metadata merge complete")
 log.close()
