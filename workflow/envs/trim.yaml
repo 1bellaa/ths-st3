@@ -1,0 +1,7 @@
+name: tb_trim
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - trimmomatic=0.40

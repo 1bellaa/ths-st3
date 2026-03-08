@@ -1,0 +1,8 @@
+name: tb_card
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - bowtie2=2.5.4
+  - samtools=1.22.1

@@ -1,0 +1,110 @@
+# TB Drug Resistance Genomics Pipeline — Configuration
+
+# ── Skip if u want
+
+skip_assembly: false
+skip_annotation: false
+skip_pangenome: false
+skip_card: false
+skip_ml: false
+
+# ── Input / Output Directories ──────────────────────────────
+fastq_dir:    "fastq"
+trim_dir:     "trimmed"
+bam_dir:      "bam"
+vcf_dir:      "vcf"
+assembly_dir: "assemblies"
+annot_dir:    "annotations"
+results_dir:  "results"
+card_dir:     "results/card"
+ml_dir:       "results/ml"
+logs_dir:     "logs"
+tmp_dir:      "tmp"
+
+# ── Reference & Databases ───────────────────────────────────
+# TB reference genome (tbdb from TB-Profiler or H37Rv)
+reference_genome: "reference/tbdb/tbdb.fasta"
+
+# CARD database FASTA and pre-built Bowtie2 index prefix
+card_db:            "db/card/card.fasta"
+card_bowtie2_index: "db/card/card"        # prefix for .bt2 files
+card_lengths:       "db/card/card_lengths.txt"
+
+# Bakta annotation database directory
+bakta_db: "db/bakta_db/db-light"
+
+# Metadata Excel file (must contain columns: ena_run, ena_experiment, ena_sample, country)
+# Drug resistance phenotype sheets per drug (columns: isolate name, resistance phenotype (pDST))
+metadata: "metadata.xlsx"
+master_data: "master_data.xlsx"
+
+# ── Drug Resistance Targets ──────────────────────────────────
+drugs:
+  - isoniazid
+  - rifampicin
+  - ethambutol
+  - streptomycin
+
+# ── Tool Versions (conda env YAMLs) ───────────────
+# Trimmomatic v0.40   → workflow/envs/trim.yaml
+# BWA-MEM     v0.7.19 → workflow/envs/align.yaml
+# SAMtools    v1.22.1 → workflow/envs/align.yaml
+# BCFtools    v1.22   → workflow/envs/align.yaml
+# Bowtie2     v2.5.4  → workflow/envs/card.yaml
+# SPAdes      v3.15.5 → workflow/envs/assembly.yaml
+# Bakta       v1.11.4 → workflow/envs/annotation.yaml
+# Panaroo     v1.3.0  → workflow/envs/pangenome.yaml
+
+# ── Threads ──────────────────────────────
+trim_threads:     4
+tbprofiler_threads: 4
+bwa_threads:      8
+bowtie2_threads:  4
+spades_threads:   4
+spades_mem_mb:    16000 # memory limit 
+bakta_threads:    8
+bakta_mem_mb:     16000 # memory limit
+panaroo_threads:  8
+matrix_threads:   4
+ml_threads:       4
+
+# ── Trimmomatic Parameters ───────────────────────────────────
+trimmomatic_adapter:      "TruSeq3-PE-2.fa"
+trimmomatic_leading:      3
+trimmomatic_trailing:     3
+trimmomatic_slidingwindow: "4:20"
+trimmomatic_minlen:       25
+
+# ── Variant Calling Parameters ───────────────────────────────
+bcftools_min_bq: 20   # minimum base quality
+bcftools_min_mq: 30   # minimum mapping quality
+
+# ── SNP Matrix Filtering ─────────────────────────────────────
+# Keep SNPs present in at least snp_maf_min fraction of samples,
+# and at most snp_maf_max fraction (removes near-fixed/invariant sites)
+snp_maf_min: 0.005
+snp_maf_max: 1.0
+
+# ── CARD Detection Thresholds ────────────────────────────────
+# A gene is "detected" only if BOTH thresholds are met
+card_min_coverage:  80.0   # minimum % of gene length covered by reads
+card_min_meandepth:  5.0   # minimum mean read depth across the gene
+
+# ── Pangenome Matrix Filtering ────────────────────────────────
+# Keep genes present in at least pangenome_maf_min fraction of samples,
+# and at most pangenome_maf_max (removes rare accessory and core genes)
+pangenome_maf_min: 0.01
+pangenome_maf_max: 0.99
+
+# ── Panaroo Parameters ───────────────────────────────────────
+panaroo_mode:           "strict"
+panaroo_core_threshold: 0.98
+
+# ── Bakta Parameters ─────────────────────────────────────────
+bakta_min_contig: 500
+
+# ── Machine Learning Parameters ──────────────────────────────
+random_state: 42
+cv_folds:     5
+rf_n_iter:    20    # RandomizedSearchCV iterations for RF
+lr_n_iter:    20    # RandomizedSearchCV iterations for LR
