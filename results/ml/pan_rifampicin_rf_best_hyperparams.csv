@@ -1,0 +1,2 @@
+drug,input_type,model,cv_auc,rf__n_estimators,rf__min_samples_split,rf__min_samples_leaf,rf__max_features,rf__max_depth,rf__class_weight
+rifampicin,pan,rf,0.7765205382852441,200,2,1,log2,None,balanced

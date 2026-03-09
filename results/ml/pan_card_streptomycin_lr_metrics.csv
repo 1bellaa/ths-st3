@@ -1,0 +1,3 @@
+drug,input_type,model,split,accuracy,precision,recall,f1,specificity,auc_roc
+streptomycin,pan_card,lr,val,0.7272727272727273,0.0,0.0,0.0,1.0,0.5
+streptomycin,pan_card,lr,test,0.6666666666666666,0.0,0.0,0.0,1.0,0.5

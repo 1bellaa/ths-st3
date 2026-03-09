@@ -1,0 +1,2 @@
+drug,input_type,model,cv_auc,rf__n_estimators,rf__min_samples_split,rf__min_samples_leaf,rf__max_features,rf__max_depth,rf__class_weight
+isoniazid,pan_card,rf,0.6998168498168498,200,2,4,log2,20,balanced

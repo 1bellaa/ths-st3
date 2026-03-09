@@ -1,0 +1,2 @@
+drug,input_type,model,cv_auc,lr__C,lr__class_weight,lr__l1_ratio,lr__max_iter,lr__penalty,lr__solver
+ethambutol,pan,lr,0.6912151265924851,0.13296521457299515,balanced,0.5426960831582485,100,l1,saga

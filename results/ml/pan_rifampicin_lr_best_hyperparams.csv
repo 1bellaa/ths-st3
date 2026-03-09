@@ -1,0 +1,2 @@
+drug,input_type,model,cv_auc,lr__C,lr__class_weight,lr__l1_ratio,lr__max_iter,lr__penalty,lr__solver
+rifampicin,pan,lr,0.7241361579596874,0.06080390190296603,balanced,0.045227288910538066,100,l1,saga

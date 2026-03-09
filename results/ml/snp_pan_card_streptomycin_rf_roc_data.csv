@@ -1,0 +1,14 @@
+model,drug,input_type,split,auc,fpr,tpr
+rf,streptomycin,snp_pan_card,val,0.7916666666666666,0.0,0.0
+rf,streptomycin,snp_pan_card,val,0.7916666666666666,0.125,0.0
+rf,streptomycin,snp_pan_card,val,0.7916666666666666,0.125,0.3333333333333333
+rf,streptomycin,snp_pan_card,val,0.7916666666666666,0.25,0.3333333333333333
+rf,streptomycin,snp_pan_card,val,0.7916666666666666,0.25,1.0
+rf,streptomycin,snp_pan_card,val,0.7916666666666666,1.0,1.0
+rf,streptomycin,snp_pan_card,test,0.65625,0.0,0.0
+rf,streptomycin,snp_pan_card,test,0.65625,0.0,0.25
+rf,streptomycin,snp_pan_card,test,0.65625,0.0,0.5
+rf,streptomycin,snp_pan_card,test,0.65625,0.375,0.5
+rf,streptomycin,snp_pan_card,test,0.65625,0.375,0.75
+rf,streptomycin,snp_pan_card,test,0.65625,1.0,0.75
+rf,streptomycin,snp_pan_card,test,0.65625,1.0,1.0

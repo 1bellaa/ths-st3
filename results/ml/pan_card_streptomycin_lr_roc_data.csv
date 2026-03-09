@@ -1,0 +1,5 @@
+model,drug,input_type,split,auc,fpr,tpr
+lr,streptomycin,pan_card,val,0.5,0.0,0.0
+lr,streptomycin,pan_card,val,0.5,1.0,1.0
+lr,streptomycin,pan_card,test,0.5,0.0,0.0
+lr,streptomycin,pan_card,test,0.5,1.0,1.0
