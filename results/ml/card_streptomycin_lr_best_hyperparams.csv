@@ -1,0 +1,2 @@
+drug,input_type,model,cv_auc,lr__C,lr__class_weight,lr__l1_ratio,lr__max_iter,lr__penalty,lr__solver
+streptomycin,card,lr,0.5,0.31489116479568624,balanced,0.9507143064099162,1000,l1,saga

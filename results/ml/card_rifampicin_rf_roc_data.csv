@@ -1,0 +1,9 @@
+model,drug,input_type,split,auc,fpr,tpr
+rf,rifampicin,card,val,0.5084134615384615,0.0,0.0
+rf,rifampicin,card,val,0.5084134615384615,0.6153846153846154,0.65625
+rf,rifampicin,card,val,0.5084134615384615,1.0,0.9375
+rf,rifampicin,card,val,0.5084134615384615,1.0,1.0
+rf,rifampicin,card,test,0.5169456921192324,0.0,0.0
+rf,rifampicin,card,test,0.5169456921192324,0.5316455696202531,0.5483870967741935
+rf,rifampicin,card,test,0.5169456921192324,0.9620253164556962,1.0
+rf,rifampicin,card,test,0.5169456921192324,1.0,1.0

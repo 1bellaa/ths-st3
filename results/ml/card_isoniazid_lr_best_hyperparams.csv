@@ -1,0 +1,2 @@
+drug,input_type,model,cv_auc,lr__C,lr__class_weight,lr__l1_ratio,lr__max_iter,lr__penalty,lr__solver
+isoniazid,card,lr,0.5460386473429951,43.37920697490943,balanced,0.2587799816000169,500,l2,saga

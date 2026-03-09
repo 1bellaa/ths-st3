@@ -1,0 +1,9 @@
+model,drug,input_type,split,auc,fpr,tpr
+rf,ethambutol,card,val,0.5721153846153846,0.0,0.0
+rf,ethambutol,card,val,0.5721153846153846,0.5256410256410257,0.6875
+rf,ethambutol,card,val,0.5721153846153846,0.9615384615384616,0.9375
+rf,ethambutol,card,val,0.5721153846153846,1.0,1.0
+rf,ethambutol,card,test,0.5755537974683544,0.0,0.0
+rf,ethambutol,card,test,0.5755537974683544,0.5443037974683544,0.6875
+rf,ethambutol,card,test,0.5755537974683544,0.9746835443037974,1.0
+rf,ethambutol,card,test,0.5755537974683544,1.0,1.0

@@ -1,0 +1,2 @@
+drug,input_type,model,cv_auc,rf__n_estimators,rf__min_samples_split,rf__min_samples_leaf,rf__max_features,rf__max_depth,rf__class_weight
+ethambutol,card,rf,0.4421276595744681,100,5,2,log2,None,balanced
