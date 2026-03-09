@@ -49,6 +49,7 @@ out_features   = snakemake.output.features
 out_params     = snakemake.output.best_hyperparams
 out_metrics    = snakemake.output.metrics
 out_split_dist = snakemake.output.split_dist
+out_roc_data   = snakemake.output.roc_data
 drug         = snakemake.params.drug
 input_type   = snakemake.params.input_type
 model_type   = snakemake.params.model          # "rf" or "lr"
@@ -73,6 +74,7 @@ TARGET_COL = f"{drug}_resistance"
 # LOAD DATA
 msg(f"📥 Loading {input_type} data for {drug} ({model_type.upper()})...")
 df = pd.read_csv(data_path, index_col=0, low_memory=False)
+msg(f"   Raw shape: {df.shape[0]} rows × {df.shape[1]} cols")
 
 # CLEAN DATA
 df = df.replace("", np.nan)
@@ -86,6 +88,14 @@ if TARGET_COL not in df.columns:
     plt.figure(); plt.title("No data"); plt.savefig(out_split_dist); plt.close()
     log.close()
     sys.exit(0)
+
+# DROP ROWS WITH MISSING TARGET
+before = len(df)
+df = df.dropna(subset=[TARGET_COL])
+dropped = before - len(df)
+if dropped > 0:
+    msg(f"   Dropped {dropped} rows with missing '{TARGET_COL}' label")
+msg(f"   Labelled samples remaining: {len(df)}")
 
 # ONE-HOT ENCODING OF CATEGORICAL METADATA (e.g. country) 
 if "country" in df.columns:
@@ -103,7 +113,7 @@ df = df.drop(columns=[c for c in drop_cols if c in df.columns], errors="ignore")
 
 # PREPARE FEATURE MATRIX AND TARGET VECTOR
 X = df.drop(columns=[TARGET_COL]).select_dtypes(include=["number"])
-y = df[TARGET_COL]
+y = df[TARGET_COL].astype(int)
 feature_names = X.columns.tolist()
 
 msg(f"  Features: {X.shape[1]}   Samples: {X.shape[0]}   "
@@ -121,17 +131,18 @@ if X.shape[0] < 20 or y.nunique() < 2:
 
 # TRAIN / TEST / VALIDATION SPLIT (60 / 20 / 20) 
 X_train, X_temp, y_train, y_temp = train_test_split(
-    X, y, test_size=0.40, random_state=RANDOM_STATE, stratify=None
+    X, y, test_size=0.40, random_state=RANDOM_STATE, stratify=y
 )
 X_val, X_test, y_val, y_test = train_test_split(
-    X_temp, y_temp, test_size=0.50, random_state=RANDOM_STATE, stratify=None
+    X_temp, y_temp, test_size=0.50, random_state=RANDOM_STATE, stratify=y_temp
 )
 msg(f"  Train: {len(y_train)}  Val: {len(y_val)}  Test: {len(y_test)}")
 
 # SPLIT RESISTANCE DISTRIBUTION — log + save image
 def _split_dist(y, name):
     r = int((y == 1).sum()); s = int((y == 0).sum())
-    msg(f"  {name:6s}  n={len(y):3d}  R={r:3d}  S={s:3d}")
+    msg(f"   {name:6s}  n={len(y):4d}  R={r:4d}  S={s:4d}  "
+        f"R%={100*r/len(y):.1f}%")
     return {"split": name, "n": len(y), "Resistant (R)": r, "Susceptible (S)": s}
 
 msg(f"\n📊 Resistance distribution per split ({drug.upper()}):")
@@ -200,31 +211,30 @@ def calc_metrics(y_true, y_pred, y_proba):
 
 # TRAIN MODELS
 if model_type == "rf":
-    imputer = SimpleImputer(strategy='constant', fill_value=-1)
-    rf = RandomForestClassifier(random_state=RANDOM_STATE, n_jobs=-1)
-    base_model = Pipeline([('imputer', imputer), ('rf', rf)])
+    base_model = Pipeline([
+        ("rf", RandomForestClassifier(random_state=RANDOM_STATE, n_jobs=-1)),
+    ])
     param_dist = {
-        "rf__n_estimators":     [50, 100, 200],
-        "rf__max_depth":        [2, 5, 10, None],
-        "rf__min_samples_split":[2, 5],
-        "rf__min_samples_leaf": [1, 2],
-        "rf__bootstrap":        [True],
-        "rf__max_features":     ["sqrt", "log2", None],
-        "rf__class_weight":     ["balanced"],
+        "rf__n_estimators":      [100, 200, 300],
+        "rf__max_depth":         [5, 10, 20, None],
+        "rf__min_samples_split": [2, 5, 10],
+        "rf__min_samples_leaf":  [1, 2, 4],
+        "rf__max_features":      ["sqrt", "log2"],
+        "rf__class_weight":      ["balanced"],
     }
     X_tr, X_v, X_te = X_train, X_val, X_test
 
 else:  # lr
-    imputer = SimpleImputer(strategy='constant', fill_value=-1)
-    scaler = MaxAbsScaler()
-    lr = LogisticRegression(random_state=RANDOM_STATE)
-    base_model = Pipeline([('imputer', imputer), ('scaler', scaler), ('lr', lr)])
+    base_model = Pipeline([
+        ("scaler", MaxAbsScaler()),
+        ("lr",     LogisticRegression(random_state=RANDOM_STATE)),
+    ])
     param_dist = {
         "lr__C":            loguniform(1e-2, 1e2),
         "lr__penalty":      ["l1", "l2", "elasticnet"],
         "lr__solver":       ["saga"],
         "lr__l1_ratio":     uniform(0, 1),
-        "lr__max_iter":     [100], # 500, 100 ---girl edit this later ‼️‼️‼️
+        "lr__max_iter":     [100, 500, 1000], # 500, 1000 ---girl edit this later ‼️‼️‼️
         "lr__class_weight": ["balanced"],
     }
     X_tr, X_v, X_te = X_train, X_val, X_test
@@ -248,7 +258,6 @@ msg(f"  Params: {best_params}")
 
 # PREDICT AND CALCULATE METRICS ON ALL SETS
 sets = {
-    "train": (X_tr, y_train),
     "val":   (X_v,  y_val),
     "test":  (X_te, y_test),
 }
@@ -303,26 +312,56 @@ for split_name, m in all_metrics.items():
 pd.DataFrame(metrics_rows).to_csv(out_metrics, index=False)
 
 # ROC CURVE
-fig, ax = plt.subplots(figsize=(7, 6))
-color = "#2ecc71" if model_type == "rf" else "#3498db"
+roc_rows = []
+for split_name in ["val", "test"]:
+    Xs, ys      = sets[split_name]
+    ypr         = best.predict_proba(Xs)[:, 1]
+    fpr, tpr, _ = roc_curve(ys, ypr)
+    auc         = all_metrics[split_name]["auc_roc"]
+    for f, t in zip(fpr, tpr):
+        roc_rows.append({
+            "model": model_type, "drug": drug, "input_type": input_type,
+            "split": split_name, "auc": auc, "fpr": f, "tpr": t,
+        })
+
+roc_data_df = pd.DataFrame(roc_rows)
+roc_data_df.to_csv(out_roc_data, index=False)
+msg(f"✅ ROC data saved → {out_roc_data}")
+
+color      = "#2ecc71" if model_type == "rf" else "#3498db"
 label_name = "Random Forest" if model_type == "rf" else "Logistic Regression"
 
-for split_name, style in [("test", "-"), ("val", "--"), ("train", ":")]:
-    m   = all_metrics[split_name]
-    Xs  = sets[split_name][0]
-    ys  = sets[split_name][1]
-    ypr = best.predict_proba(Xs)[:, 1]
-    fpr, tpr, _ = roc_curve(ys, ypr)
-    ax.plot(
-        fpr, tpr, lw=2, linestyle=style, color=color,
-        label=f"{split_name.capitalize()} (AUC={m['auc_roc']:.3f})"
-    )
+fig, ax = plt.subplots(figsize=(7, 6))
+for split_name, style in [("test", "-"), ("val", "--")]:
+    subset = roc_data_df[roc_data_df["split"] == split_name]
+    auc    = all_metrics[split_name]["auc_roc"]
+    ax.plot(subset["fpr"], subset["tpr"], lw=2, linestyle=style, color=color,
+            label=f"{split_name.capitalize()} (AUC={auc:.3f})")
 
 ax.plot([0, 1], [0, 1], "k:", lw=1.5, alpha=0.6, label="Random (AUC=0.500)")
-ax.set_title(
-    f"{label_name} — {drug.capitalize()} [{input_type}]",
-    fontweight="bold",
-)
+ax.set_title(f"{label_name} — {drug.capitalize()} [{input_type}]", fontweight="bold")
+ax.set_xlabel("False Positive Rate")
+ax.set_ylabel("True Positive Rate")
+ax.legend(loc="lower right")
+ax.grid(True, alpha=0.3)
+ax.set_xlim([-0.02, 1.02])
+ax.set_ylim([-0.02, 1.02])
+plt.tight_layout()
+plt.savefig(out_roc, dpi=200, bbox_inches="tight")
+plt.close()
+msg(f"✅ ROC curve saved → {out_roc}")
+
+# Individual model ROC plot (single model, all 3 splits)
+fig, ax = plt.subplots(figsize=(7, 6))
+for split_name, style in [("test", "-"), ("val", "--")]:
+    subset = roc_data_df[roc_data_df["split"] == split_name]
+    auc    = all_metrics[split_name]["auc_roc"]
+    ax.plot(subset["fpr"], subset["tpr"], lw=2, linestyle=style, color=color,
+            label=f"{split_name.capitalize()} (AUC={auc:.3f})")
+
+ax.plot([0, 1], [0, 1], "k:", lw=1.5, alpha=0.6, label="Random (AUC=0.500)")
+ax.set_title(f"{label_name} — {drug.capitalize()} [{input_type}]",
+             fontweight="bold")
 ax.set_xlabel("False Positive Rate")
 ax.set_ylabel("True Positive Rate")
 ax.legend(loc="lower right")
