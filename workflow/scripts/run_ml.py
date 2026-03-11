@@ -219,6 +219,7 @@ if model_type == "rf":
         "rf__max_depth":         [5, 10, 20, None],
         "rf__min_samples_split": [2, 5, 10],
         "rf__min_samples_leaf":  [1, 2, 4],
+        "rf__bootstrap":         [True], # i forgot this, but by default it's true
         "rf__max_features":      ["sqrt", "log2"],
         "rf__class_weight":      ["balanced"],
     }
