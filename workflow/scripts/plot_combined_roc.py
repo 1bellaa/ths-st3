@@ -3,9 +3,7 @@ plot_combined_roc.py — Combined ROC curve: RF + LR on same plot
 ================================================================
 One plot per drug per input_type, showing:
   - RF test ROC  (solid green)
-  - RF val ROC   (dashed green)
   - LR test ROC  (solid blue)
-  - LR val ROC   (dashed blue)
   - Random baseline (black dotted)
 
 Train curves are omitted from combined plot to keep it readable.
@@ -51,8 +49,7 @@ RF_COLOR = "#27ae60"   # green
 LR_COLOR = "#2980b9"   # blue
 
 plot_splits = [
-    ("test",  "-",  "Test"),
-    ("val",   "--", "Val"),
+    ("test",  "-",  "Test")
 ]
 
 for split, style, split_label in plot_splits:
@@ -81,12 +78,11 @@ import matplotlib.lines as mlines
 rf_patch   = mpatches.Patch(color=RF_COLOR, label="Random Forest")
 lr_patch   = mpatches.Patch(color=LR_COLOR, label="Logistic Regression")
 test_line  = mlines.Line2D([], [], color="grey", linestyle="-",  label="Test split")
-val_line   = mlines.Line2D([], [], color="grey", linestyle="--", label="Val split")
 
 handles, labels = ax.get_legend_handles_labels()
 legend1 = ax.legend(handles=handles, loc="lower right", fontsize=8.5)
 ax.add_artist(legend1)
-ax.legend(handles=[rf_patch, lr_patch, test_line, val_line],
+ax.legend(handles=[rf_patch, lr_patch, test_line],
           loc="upper left", fontsize=8.5, framealpha=0.8)
 
 ax.set_title(
