@@ -16,11 +16,16 @@ Join strategy (isolate name as anchor):
   accession (matrix row) → isolate name (via sample_isolate_map.tsv)
                          → resistance labels (via master_data.xlsx drug sheets)
                          → country / ena_* cols (via metadata.xlsx)
-
+                         
 Outputs:
   input_snp.csv       SNP features + labels + country
   input_pan.csv       Pangenome features + labels + country (empty if skipped)
   input_snp_pan.csv   Combined features + labels + country (empty if skipped)
+  input_card.csv      CARD features + labels (empty if skipped)
+  input_snp_card.csv  SNP + CARD features + labels (empty if skipped)
+  input_pan_card.csv  Pangenome + CARD features + labels (empty if skipped)
+  input_snp_pan_card.csv  SNP + Pangenome + CARD features + labels (empty if skipped)
+
   country_distribution.png   — pie chart of sample countries
   resistance_summary.png     — table image of R/S/no_label counts per drug
   country_distribution.png   — pie chart of sample countries
@@ -35,7 +40,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
-# ── Snakemake bindings ────────────────────────────────────────────────────────
+# Snakemake bindings 
 snp_matrix_path    = snakemake.input.snp_matrix
 pan_matrix_path    = snakemake.input.pan_matrix
 card_matrix_path   = snakemake.input.card_matrix
@@ -65,14 +70,14 @@ def msg(m):
     log.flush()
 
 msg("=" * 60)
-msg("📎 Merging resistance labels into feature matrices")
+msg("  Merging resistance labels into feature matrices")
 msg(f"   metadata     : {metadata_file}")
 msg(f"   master_data  : {master_data_file}")
 msg(f"   skip_pangenome = {skip_pangenome}")
 msg("=" * 60)
 
 # ── 1. Load sample → isolate name map ────────────────────────────────────────
-msg("\n🗺️  Loading sample → isolate name map...")
+msg("\n  Loading sample → isolate name map...")
 map_df = pd.read_csv(sample_isolate_map, sep="\t", dtype=str)
 map_df["accession"]    = map_df["accession"].str.strip().str.upper()
 map_df["isolate_name"] = map_df["isolate_name"].str.strip()
@@ -94,7 +99,7 @@ if not skip_pangenome:
 matrix_ids = list(snp_df.index)
 
 # ── 3. Load metadata.xlsx ─────────────────────────────────────────────────────
-msg("\n📋 Loading metadata.xlsx...")
+msg("\n Loading metadata.xlsx...")
 meta_xl  = pd.ExcelFile(metadata_file)
 meta_raw = meta_xl.parse(meta_xl.sheet_names[0])
 meta_raw.columns = [str(c).strip() for c in meta_raw.columns]
@@ -162,9 +167,10 @@ for drug in drugs:
         r       = int((labels_df[colname] == 1).sum())
         s       = int((labels_df[colname] == 0).sum())
         missing = int(labels_df[colname].isna().sum())
-        msg(f"   {drug.upper():15s}  R={r:3d}  S={s:3d}  no_label={missing}")
+        total   = r + s + missing
+        msg(f"   {drug.upper():15s}  R={r:3d}  S={s:3d}  no_label={missing}   total={total}")
         resist_rows.append({"Drug": drug.upper(), "Resistant (R)": r,
-                             "Susceptible (S)": s, "No Label": missing})
+                             "Susceptible (S)": s, "No Label": missing, "Samples": total})
 
 if "country" in labels_df.columns:
     msg("\n🌍 Country distribution:")

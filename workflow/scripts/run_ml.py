@@ -47,6 +47,7 @@ warnings.filterwarnings("ignore")
 data_path    = snakemake.input.data
 out_roc        = snakemake.output.roc
 out_features   = snakemake.output.features
+out_features_csv = snakemake.output.features_csv
 out_params     = snakemake.output.best_hyperparams
 out_metrics    = snakemake.output.metrics
 out_split_dist = snakemake.output.split_dist
@@ -291,6 +292,13 @@ top_features = pd.DataFrame({
     "feature":    [feat_names[i] for i in top_idx],
     "importance": importances[top_idx],
 })
+
+out_features_csv = snakemake.output.features_csv
+top_features["drug"]       = drug
+top_features["input_type"] = input_type  
+top_features["model"]      = model_type
+top_features.to_csv(out_features_csv, index=False)
+msg(f"✅ Feature CSV saved → {out_features_csv}")
 
 # SAVE BEST HYPERPARAMETERS CSV
 params_row = {
