@@ -45,16 +45,6 @@ drugs:
   - ethambutol
   - streptomycin
 
-# ── Tool Versions (conda env YAMLs) ───────────────
-# Trimmomatic v0.40   → workflow/envs/trim.yaml
-# BWA-MEM     v0.7.19 → workflow/envs/align.yaml
-# SAMtools    v1.22.1 → workflow/envs/align.yaml
-# BCFtools    v1.22   → workflow/envs/align.yaml
-# Bowtie2     v2.5.4  → workflow/envs/card.yaml
-# SPAdes      v3.15.5 → workflow/envs/assembly.yaml
-# Bakta       v1.11.4 → workflow/envs/annotation.yaml
-# Panaroo     v1.3.0  → workflow/envs/pangenome.yaml
-
 # ── Threads ──────────────────────────────
 trim_threads:     4
 tbprofiler_threads: 4

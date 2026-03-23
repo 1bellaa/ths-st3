@@ -1,6 +1,5 @@
 use-conda: true
-conda-prefix: "/root/.snakemake/conda"
-cores: 12
-jobs: 8
+cores: 86
+jobs: 10
 rerun-incomplete: true
 keep-going: true
