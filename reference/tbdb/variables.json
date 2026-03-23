@@ -1,0 +1,25 @@
+{
+    "db-schema-version": "2.0.0",
+    "snpEff_db":"Mycobacterium_tuberculosis_h37rv",
+    "drugs": [
+        "rifampicin",
+        "isoniazid",
+        "ethambutol",
+        "pyrazinamide",
+        "moxifloxacin",
+        "levofloxacin",
+        "bedaquiline",
+        "delamanid",
+        "pretomanid",
+        "linezolid",
+        "streptomycin",
+        "amikacin",
+        "kanamycin",
+        "capreomycin",
+        "clofazimine",
+        "ethionamide",
+        "para-aminosalicylic_acid",
+        "cycloserine"
+    ],
+    "tb-profiler-version": ">=6.6.0,<7.0.0"
+}
