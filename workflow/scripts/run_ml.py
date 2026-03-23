@@ -23,6 +23,7 @@ import matplotlib.patches as mpatches
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from imblearn.under_sampling import RandomUnderSampler
 from scipy.stats import loguniform, uniform
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
@@ -138,6 +139,12 @@ X_val, X_test, y_val, y_test = train_test_split(
 )
 msg(f"  Train: {len(y_train)}  Val: {len(y_val)}  Test: {len(y_test)}")
 
+# UNDERSAMPLE TRAINING SET TO BALANCE CLASSES
+rus = RandomUnderSampler(random_state=RANDOM_STATE)
+X_train, y_train = rus.fit_resample(X_train, y_train)
+msg(f"  After undersampling Train: {len(y_train)}  "
+    f"Resistant: {y_train.sum()}   Susceptible: {(y_train==0).sum()}")
+
 # SPLIT RESISTANCE DISTRIBUTION — log + save image
 def _split_dist(y, name):
     r = int((y == 1).sum()); s = int((y == 0).sum())
@@ -212,14 +219,14 @@ def calc_metrics(y_true, y_pred, y_proba):
 # TRAIN MODELS
 if model_type == "rf":
     base_model = Pipeline([
-        ("rf", RandomForestClassifier(random_state=RANDOM_STATE, n_jobs=-1)),
+        ("rf", RandomForestClassifier(random_state=RANDOM_STATE)),
     ])
     param_dist = {
         "rf__n_estimators":      [100, 200, 300],
         "rf__max_depth":         [5, 10, 20, None],
         "rf__min_samples_split": [2, 5, 10],
         "rf__min_samples_leaf":  [1, 2, 4],
-        "rf__bootstrap":         [True], # i forgot this, but by default it's true
+        "rf__bootstrap":         [True], # fk i forgot this
         "rf__max_features":      ["sqrt", "log2"],
         "rf__class_weight":      ["balanced"],
     }
@@ -232,10 +239,10 @@ else:  # lr
     ])
     param_dist = {
         "lr__C":            loguniform(1e-2, 1e2),
-        "lr__penalty":      ["l1", "l2", "elasticnet"],
+        "lr__penalty":      ["elasticnet"],
         "lr__solver":       ["saga"],
         "lr__l1_ratio":     uniform(0, 1),
-        "lr__max_iter":     [100, 500, 1000], # 500, 1000 ---girl edit this later ‼️‼️‼️
+        "lr__max_iter":     [500, 1000], # 500, 1000 ---girl edit this later ‼️‼️‼️
         "lr__class_weight": ["balanced"],
     }
     X_tr, X_v, X_te = X_train, X_val, X_test

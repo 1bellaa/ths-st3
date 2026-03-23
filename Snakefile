@@ -74,14 +74,14 @@ if SKIP_ASSEMBLY or SKIP_ANNOTATION:
 
 # Samples for CARD screening — read from existing input_snp.csv if available,
 # otherwise fall back to SAMPLES (full pipeline run)
-_input_snp_path = Path(config["results_dir"]) / "ml" / "input_snp.csv"
-if _input_snp_path.exists():
-    import pandas as _pd
-    CARD_SAMPLES = list(_pd.read_csv(_input_snp_path, index_col=0).index.astype(str))
-    print(f"📊 CARD_SAMPLES loaded from input_snp.csv: {len(CARD_SAMPLES)} samples")
-else:
-    CARD_SAMPLES = SAMPLES
-    print(f"📊 CARD_SAMPLES using SAMPLES: {len(CARD_SAMPLES)} samples")
+# _input_snp_path = Path(config["results_dir"]) / "ml" / "input_snp.csv"
+# if _input_snp_path.exists():
+#     import pandas as _pd
+#     CARD_SAMPLES = list(_pd.read_csv(_input_snp_path, index_col=0).index.astype(str))
+#     print(f"📊 CARD_SAMPLES loaded from input_snp.csv: {len(CARD_SAMPLES)} samples")
+# else:
+#     CARD_SAMPLES = SAMPLES
+#     print(f"📊 CARD_SAMPLES using SAMPLES: {len(CARD_SAMPLES)} samples")
 
 if SKIP_PANGENOME and SKIP_CARD:
     ML_INPUT_TYPES = ["snp"]
@@ -170,6 +170,11 @@ pd.DataFrame(
 ).to_csv(_map_path, sep="\t", index=False)
 print(f"   Sample→isolate map written to {_map_path}")
 
+# CARD_SAMPLES: use existing coverage files if available, else all SAMPLES
+_card_dir = Path(config["card_dir"])
+_existing = [s for s in SAMPLES if (_card_dir / f"{s}.card_coverage.txt").exists()]
+CARD_SAMPLES = _existing if _existing else SAMPLES
+print(f"📊 CARD_SAMPLES: {len(CARD_SAMPLES)} of {len(SAMPLES)} samples have coverage files")
 
 # ── Wildcard constraints ───────────────────────────────────────────────────────
 wildcard_constraints:
@@ -183,11 +188,12 @@ wildcard_constraints:
 def card_targets():
     if SKIP_CARD:
         return []
-    return (
-        expand(str(CARD_DIR / "{sample}.card_coverage.txt"), sample=CARD_SAMPLES)
-        + [str(RESULTS_DIR / "card_summary.csv")]
-        + [str(RESULTS_DIR / "card_binary_matrix.csv")]
-    )
+    return []
+    # return (
+    #     expand(str(CARD_DIR / "{sample}.card_coverage.txt"), sample=CARD_SAMPLES)
+    #     + [str(RESULTS_DIR / "card_summary.csv")]
+    #     + [str(RESULTS_DIR / "card_binary_matrix.csv")]
+    # )
 
 def assembly_targets():
     if SKIP_ASSEMBLY:
@@ -217,7 +223,12 @@ def ml_targets():
                     str(ML_DIR / f"{it}_{drug}_{model}_metrics.csv"),
                     str(ML_DIR / f"{it}_{drug}_{model}_best_hyperparams.csv"),
                     str(ML_DIR / f"{it}_{drug}_{model}_split_dist.png"),
+                    str(ML_DIR / f"{it}_{drug}_{model}_roc_data.csv"),
                 ]
+            # Combined RF+LR ROC per drug per input_type
+            out.append(str(ML_DIR / f"{it}_{drug}_combined_roc.png"))
+        # One summary plot per input_type (all drugs, RF vs LR)
+        out.append(str(ML_DIR / f"{it}_model_summary.png"))
     return out
 
 # ==================== RULE ALL ====================
@@ -248,7 +259,7 @@ rule download_fastq:
     threads: 1
     retries: 3
     resources:
-        downloads = 2, # change concurrent download
+        downloads = 3, # change concurrent download
     conda:
         "workflow/envs/download.yaml"
     script:
@@ -287,31 +298,10 @@ rule preprocess_sample:
 # CARD BAM is temp() — deleted after coverage file is written.
 # ===========================================================
 if not SKIP_CARD:
-    rule download_fastq_for_card:
-        """Download FASTQ only for CARD screening (uses CARD_SAMPLES from input_snp.csv).
-        FASTQs are temp() — deleted automatically after card_screen finishes."""
-        output:
-            r1   = temp(FASTQ_DIR / ".card" / "{sample}_1.fastq.gz"),
-            r2   = temp(FASTQ_DIR / ".card" / "{sample}_2.fastq.gz"),
-            done = touch(FASTQ_DIR / ".card" / ".{sample}.done"),
-        params:
-            sample        = "{sample}",
-            metadata_file = METADATA,
-        log:
-            LOGS_DIR / "download_card" / "{sample}.log",
-        threads: 1
-        retries: 3
-        resources:
-            downloads = 1,
-        conda:
-            "workflow/envs/download.yaml"
-        script:
-            "workflow/scripts/download.py"
-
     rule card_screen:
         input:
-            r1 = FASTQ_DIR / ".card" / "{sample}_1.fastq.gz",
-            r2 = FASTQ_DIR / ".card" / "{sample}_2.fastq.gz",
+            r1 = FASTQ_DIR / "{sample}_1.fastq.gz",
+            r2 = FASTQ_DIR / "{sample}_2.fastq.gz",
         output:
             bam      = temp(CARD_DIR / "{sample}.card.bam"),
             coverage = CARD_DIR / "{sample}.card_coverage.txt",
@@ -566,6 +556,8 @@ rule merge_metadata:
         snp_card    = ML_DIR / "input_snp_card.csv",
         pan_card    = ML_DIR / "input_pan_card.csv",
         snp_pan_card = ML_DIR / "input_snp_pan_card.csv",
+        country_plot    = RESULTS_DIR / "country_distribution.png",
+        resistance_plot = RESULTS_DIR / "resistance_summary.png",
     params:
         drugs          = DRUGS,
         skip_pangenome = SKIP_PANGENOME,
@@ -577,7 +569,7 @@ rule merge_metadata:
 
 # ===========================================================
 # STEPS 10-11: ML — RANDOM FOREST + LOGISTIC REGRESSION
-# ===========================================================
+# # ===========================================================
 if not SKIP_ML:
     rule run_rf:
         input:
@@ -588,6 +580,7 @@ if not SKIP_ML:
             metrics          = ML_DIR / "{input_type}_{drug}_rf_metrics.csv",
             best_hyperparams = ML_DIR / "{input_type}_{drug}_rf_best_hyperparams.csv",
             split_dist       = ML_DIR / "{input_type}_{drug}_rf_split_dist.png",
+            roc_data         = ML_DIR / "{input_type}_{drug}_rf_roc_data.csv",
         params:
             drug         = "{drug}",
             input_type   = "{input_type}",
@@ -609,6 +602,7 @@ if not SKIP_ML:
             metrics          = ML_DIR / "{input_type}_{drug}_lr_metrics.csv",
             best_hyperparams = ML_DIR / "{input_type}_{drug}_lr_best_hyperparams.csv",
             split_dist       = ML_DIR / "{input_type}_{drug}_lr_split_dist.png",
+            roc_data         = ML_DIR / "{input_type}_{drug}_lr_roc_data.csv",
         params:
             drug         = "{drug}",
             input_type   = "{input_type}",
@@ -621,6 +615,40 @@ if not SKIP_ML:
         conda:   "workflow/envs/ml.yaml"
         script:  "workflow/scripts/run_ml.py"
 
+
+    rule plot_combined_roc:
+        input:
+            rf_roc_data = ML_DIR / "{input_type}_{drug}_rf_roc_data.csv",
+            lr_roc_data = ML_DIR / "{input_type}_{drug}_lr_roc_data.csv",
+        output:
+            combined_roc = ML_DIR / "{input_type}_{drug}_combined_roc.png",
+        params:
+            drug       = "{drug}",
+            input_type = "{input_type}",
+        log:
+            LOGS_DIR / "ml" / "{input_type}_{drug}_combined_roc.log",
+        conda:
+            "workflow/envs/ml.yaml"
+        script:
+            "workflow/scripts/plot_combined_roc.py"
+
+    rule plot_model_summary:
+        input:
+            metrics_files = expand(
+                str(ML_DIR / "{{input_type}}_{drug}_{model}_metrics.csv"),
+                drug=DRUGS, model=["rf", "lr"],
+            ),
+        output:
+            summary_plot = ML_DIR / "{input_type}_model_summary.png",
+        params:
+            input_type = "{input_type}",
+            drugs      = DRUGS,
+        log:
+            LOGS_DIR / "ml" / "{input_type}_model_summary.log",
+        conda:
+            "workflow/envs/ml.yaml"
+        script:
+            "workflow/scripts/plot_model_summary.py"
 
 onsuccess:
     print("\n🎉 Pipeline completed successfully!")
