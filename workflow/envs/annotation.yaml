@@ -3,6 +3,6 @@ channels:
   - bioconda
   - defaults
 dependencies:
-  - python=3.11
-  - pyhmmer=0.10.15
-  - bakta=1.11.4
+  - python=3.13.12
+  - pyhmmer=0.12.0
+  - bakta=1.12.0
