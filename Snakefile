@@ -677,7 +677,7 @@ rule annotate_features:
         pan_gene_table = str(RESULTS_DIR / "pangenome" / "gene_presence_absence.csv")
                          if not SKIP_PANGENOME else None,
     log:   LOGS_DIR / "annotate_features.log"
-    conda: "workflow/envs/ml.yaml"
+    #conda: "workflow/envs/ml.yaml"
     script: "workflow/scripts/annotate_features.py"
 
 rule plot_feature_venn:
@@ -691,7 +691,7 @@ rule plot_feature_venn:
         input_type = "{input_type}",
         drugs      = DRUGS
     log: LOGS_DIR / "plots" / "{input_type}_feature_venn.log"
-    conda: "workflow/envs/ml.yaml"
+    #conda: "workflow/envs/ml.yaml"
     script: "workflow/scripts/plot_feature_venn.py"
 
 rule plot_roc_by_input:
@@ -704,7 +704,7 @@ rule plot_roc_by_input:
         drug        = "{drug}",
         input_types = ML_INPUT_TYPES
     log: LOGS_DIR / "plots" / "{drug}_roc_by_input.log"
-    conda: "workflow/envs/ml.yaml"
+    #conda: "workflow/envs/ml.yaml"
     script: "workflow/scripts/plot_roc_by_input_type.py"
 
 rule plot_data_dist:
