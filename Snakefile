@@ -231,6 +231,18 @@ def ml_targets():
         out.append(str(ML_DIR / f"{it}_model_summary.png"))
     return out
 
+def plot_targets():
+    if SKIP_ML:
+        return []
+    out = []
+    for drug in DRUGS:
+        out.append(str(RESULTS_DIR / "plots" / f"{drug}_roc_by_input_type.png"))
+        out.append(str(RESULTS_DIR / "plots" / f"{drug}_data_distribution.png"))
+    for it in ML_INPUT_TYPES:
+        out.append(str(RESULTS_DIR / "plots" / f"{it}_rf_feature_venn.png"))
+    out.append(str(ML_DIR / "annotated_features.csv"))
+    return out
+
 # ==================== RULE ALL ====================
 rule all:
     input:
@@ -240,6 +252,7 @@ rule all:
         # annotation_targets(),
         pangenome_targets(),
         ml_targets(),
+        plot_targets(),
 
 
 # ===========================================================
