@@ -261,7 +261,7 @@ rule download_fastq:
     resources:
         downloads = 3, # change concurrent download
     conda:
-        "workflow/envs/download.yaml"
+        "tb_download"
     script:
         "workflow/scripts/download.py"
 
@@ -288,7 +288,7 @@ rule preprocess_sample:
         LOGS_DIR / "preprocess" / "{sample}.log",
     threads: config.get("tbprofiler_threads", 4)
     conda:
-        "workflow/envs/align.yaml"
+        "tb_align"
     script:
         "workflow/scripts/tbprofiler.py"
 
@@ -314,7 +314,7 @@ if not SKIP_CARD:
         resources:
             mem_mb = config.get("card_mem_mb", 4000),
         conda:
-            "workflow/envs/card.yaml"
+            "tb_card"
         shell:
             """
             bowtie2 \
@@ -340,7 +340,7 @@ if not SKIP_CARD:
             LOGS_DIR / "card_summary.log",
         threads: 1
         conda:
-            "workflow/envs/ml.yaml"
+            "tb_ml"
         script:
             "workflow/scripts/summarize_card.py"
 
@@ -365,7 +365,7 @@ if not SKIP_ASSEMBLY:
         resources:
             mem_mb = config.get("spades_mem_mb", 16000),
         conda:
-            "workflow/envs/assembly.yaml"
+            "tb_assembly"
         # --only-assembler later if we want to skip read error correction (but it seems to help even with clean Illumina data, so leaving it in for now)
         shell:
             """
@@ -394,7 +394,7 @@ if not SKIP_ANNOTATION:
         resources:
             mem_mb = config.get("bakta_mem_mb", 12000),
         conda:
-            "workflow/envs/annotation.yaml"
+            "tb_annotation"
         shell:
             """
             bakta --db {params.db} --output {params.outdir} \
@@ -418,7 +418,7 @@ if not SKIP_PANGENOME:
             LOGS_DIR / "panaroo.log",
         threads: config.get("panaroo_threads", 8)
         conda:
-            "workflow/envs/pangenome.yaml"
+            "tb_pangenome"
         shell:
             """
             panaroo -i {input.gffs} -o {params.outdir} \
@@ -432,7 +432,7 @@ if not SKIP_PANGENOME:
         output:
             matrix = ML_DIR / "pangenome_matrix.csv",
         log:   LOGS_DIR / "pangenome_matrix.log"
-        conda: "workflow/envs/ml.yaml"
+        conda: "tb_ml"
         script: "workflow/scripts/build_pangenome_matrix.py"
 
     rule filter_pangenome_matrix:
@@ -446,7 +446,7 @@ if not SKIP_PANGENOME:
             matrix_type = "pangenome",
         log:     LOGS_DIR / "filter_pangenome_matrix.log"
         threads: config.get("matrix_threads", 8)
-        conda:   "workflow/envs/ml.yaml"
+        conda:   "tb_ml"
         script:  "workflow/scripts/filter_matrix.py"
 
 
@@ -470,7 +470,7 @@ rule build_snp_matrix:
         vcf_dir = str(VCF_DIR),
     log:     LOGS_DIR / "snp_matrix.log"
     threads: config.get("matrix_threads", 8)
-    conda:   "workflow/envs/ml.yaml"
+    conda:   "tb_ml"
     script:  "workflow/scripts/build_matrix.py"
 
 
@@ -485,7 +485,7 @@ rule filter_snp_matrix:
         matrix_type = "snp",
     log:     LOGS_DIR / "filter_snp_matrix.log"
     threads: config.get("matrix_threads", 8)
-    conda:   "workflow/envs/ml.yaml"
+    conda:   "tb_ml"
     script:  "workflow/scripts/filter_matrix.py"
 
 
@@ -563,7 +563,7 @@ rule merge_metadata:
         skip_pangenome = SKIP_PANGENOME,
         skip_card      = SKIP_CARD,
     log:   LOGS_DIR / "merge_metadata.log"
-    conda: "workflow/envs/ml.yaml"
+    conda: "tb_ml"
     script: "workflow/scripts/merge_metadata.py"
 
 
@@ -590,7 +590,7 @@ if not SKIP_ML:
             cv_folds     = config.get("cv_folds", 5),
         log:     LOGS_DIR / "ml" / "{input_type}_{drug}_rf.log"
         threads: config.get("ml_threads", 4)
-        conda:   "workflow/envs/ml.yaml"
+        conda:   "tb_ml"
         script:  "workflow/scripts/run_ml.py"
 
     rule run_lr:
@@ -612,7 +612,7 @@ if not SKIP_ML:
             cv_folds     = config.get("cv_folds", 5),
         log:     LOGS_DIR / "ml" / "{input_type}_{drug}_lr.log"
         threads: 1
-        conda:   "workflow/envs/ml.yaml"
+        conda:   "tb_ml"
         script:  "workflow/scripts/run_ml.py"
 
 
@@ -628,7 +628,7 @@ if not SKIP_ML:
         log:
             LOGS_DIR / "ml" / "{input_type}_{drug}_combined_roc.log",
         conda:
-            "workflow/envs/ml.yaml"
+            "tb_ml"
         script:
             "workflow/scripts/plot_combined_roc.py"
 
@@ -646,7 +646,7 @@ if not SKIP_ML:
         log:
             LOGS_DIR / "ml" / "{input_type}_model_summary.log",
         conda:
-            "workflow/envs/ml.yaml"
+            "tb_ml"
         script:
             "workflow/scripts/plot_model_summary.py"
 
