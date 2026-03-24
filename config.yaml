@@ -51,9 +51,9 @@ tbprofiler_threads: 4
 bwa_threads:      8
 bowtie2_threads:  4
 spades_threads:   4
-spades_mem_mb:    16000 # memory limit 
+spades_mem_mb:    8000 # memory limit 
 bakta_threads:    8
-bakta_mem_mb:     16000 # memory limit
+bakta_mem_mb:     8000 # memory limit
 panaroo_threads:  8
 matrix_threads:   4
 ml_threads:       4
