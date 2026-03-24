@@ -170,11 +170,9 @@ pd.DataFrame(
 ).to_csv(_map_path, sep="\t", index=False)
 print(f"   Sample→isolate map written to {_map_path}")
 
-# CARD_SAMPLES: use existing coverage files if available, else all SAMPLES
-_card_dir = Path(config["card_dir"])
-_existing = [s for s in SAMPLES if (_card_dir / f"{s}.card_coverage.txt").exists()]
-CARD_SAMPLES = _existing if _existing else SAMPLES
-print(f"📊 CARD_SAMPLES: {len(CARD_SAMPLES)} of {len(SAMPLES)} samples have coverage files")
+# CARD_SAMPLES
+CARD_SAMPLES = SAMPLES 
+print(f"📊 CARD_SAMPLES: total pool is {len(CARD_SAMPLES)} samples")
 
 # ── Wildcard constraints ───────────────────────────────────────────────────────
 wildcard_constraints:
@@ -188,12 +186,10 @@ wildcard_constraints:
 def card_targets():
     if SKIP_CARD:
         return []
-    return []
-    # return (
-    #     expand(str(CARD_DIR / "{sample}.card_coverage.txt"), sample=CARD_SAMPLES)
-    #     + [str(RESULTS_DIR / "card_summary.csv")]
-    #     + [str(RESULTS_DIR / "card_binary_matrix.csv")]
-    # )
+    return [
+        str(RESULTS_DIR / "card_summary.csv"),
+        str(RESULTS_DIR / "card_binary_matrix.csv")
+    ]
 
 def assembly_targets():
     if SKIP_ASSEMBLY:
