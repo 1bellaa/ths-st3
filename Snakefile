@@ -409,7 +409,6 @@ if not SKIP_PANGENOME:
             gffs = expand(str(ANNOT_DIR / "{sample}" / "{sample}.gff3"), sample=SAMPLES),
         output:
             matrix = RESULTS_DIR / "pangenome" / "gene_presence_absence.csv",
-            core   = RESULTS_DIR / "pangenome" / "core_gene_alignment.aln",
         params:
             outdir      = str(RESULTS_DIR / "pangenome"),
             mode        = config.get("panaroo_mode", "strict"),
