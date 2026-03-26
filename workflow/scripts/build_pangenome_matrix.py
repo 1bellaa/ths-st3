@@ -1,11 +1,30 @@
 """
 Convert Panaroo gene_presence_absence.csv to a binary sample×gene matrix.
 Snakemake script — no subprocess calls.
+
+Memory-efficient chunked approach:
+  1. Read header once to get sample column names.
+  2. Pass 1 (cheap): scan only the gene-name index column to count n_genes.
+  3. Allocate a compact numpy uint8 matrix: n_samples × n_genes (~25 MB for 2484×10K).
+  4. Pass 2 (chunked): read 500 genes at a time, convert chunk to binary (uint8),
+     fill the numpy matrix in place. String data is freed after each chunk.
+  5. Write the transposed matrix (samples as rows) row-by-row to CSV.
+
+Why the original was OOM:
+  pd.read_csv (full Panaroo CSV) → 2484 samples × 10K genes of string objects
+  ≈ 24M Python strings × ~100 bytes each = ~2.5 GB
+  Then .notna() & (df != "") → another boolean copy = ~24 MB (fine on its own)
+  Then .astype(int) → another copy
+  Then .T → another copy
+  Peak: ~3–4 GB just to load and convert the strings.
 """
 
-from pathlib import Path
-import pandas as pd
+import csv
 import sys
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
 
 # SNAKEMAKE BINDINGS
 pan_csv       = snakemake.input.pan_csv
@@ -22,25 +41,78 @@ def msg(m):
 
 msg("🧬 Building pangenome matrix from Panaroo output...")
 
-# tama ba to pacheck na lang pls nakalimutan ko na tysm
-# Panaroo gene_presence_absence.csv layout:
-#   Gene, Non-unique Gene name, Annotation, sample1, sample2, ...
-#   Present = gene ID string | Absent = ""
-df = pd.read_csv(pan_csv, index_col=0, low_memory=False)
+META_COLS  = ["Non-unique Gene name", "Annotation"]
+CHUNK_SIZE = 500   # genes per chunk 
 
-# DROP META COLUMNS IF PRESENT (e.g. "Non-unique Gene name", "Annotation")
-meta_cols = ["Non-unique Gene name", "Annotation"]
-df = df.drop(columns=[c for c in meta_cols if c in df.columns], errors="ignore")
+# Get sample column names from the header row 
+# To know n_samples before allocating the numpy matrix
+header_df   = pd.read_csv(pan_csv, index_col=0, nrows=0, low_memory=False)
+sample_cols = [c for c in header_df.columns if c not in META_COLS]
+n_samples   = len(sample_cols)
+msg(f"   Sample columns detected: {n_samples}")
+msg(f"   Meta columns dropped   : {[c for c in META_COLS if c in header_df.columns]}")
 
-# CONVERT TO BINARY: non-empty string → 1, empty → 0 
-binary = df.notna() & (df != "")
-binary = binary.astype(int)
+if n_samples == 0:
+    msg("❌ No sample columns found — check Panaroo output format")
+    log.close()
+    sys.exit(1)
 
-# TRANSPOSE: genes are columns, samples are rows
-binary = binary.T
-binary.index.name = "sample"
+# Count total genes by scanning only the index column (gene names) in chunks
+gene_names = []
+for chunk in pd.read_csv(pan_csv, index_col=0, chunksize=CHUNK_SIZE,
+                          usecols=[0], low_memory=False):
+    gene_names.extend(chunk.index.tolist())
 
-msg(f"📊 Pangenome matrix: {binary.shape[0]} samples × {binary.shape[1]} genes")
-binary.to_csv(output_matrix)
+n_genes = len(gene_names)
+msg(f"   Total genes: {n_genes}")
+
+# Allocate compact numpy matrix: samples × genes
+binary_matrix = np.zeros((n_samples, n_genes), dtype=np.uint8)
+sample_to_idx = {s: i for i, s in enumerate(sample_cols)}
+msg(f"   Allocated numpy matrix: {binary_matrix.nbytes / 1e6:.1f} MB  "
+    f"({n_samples} samples × {n_genes} genes × uint8)")
+
+# Fill matrix chunk by chunk
+gene_offset = 0
+chunks_done = 0
+
+for chunk in pd.read_csv(pan_csv, index_col=0, chunksize=CHUNK_SIZE,
+                          low_memory=False):
+    # Drop meta columns if present in this chunk
+    chunk = chunk.drop(columns=[c for c in META_COLS if c in chunk.columns],
+                       errors="ignore")
+
+    # Reorder to canonical sample order; fill missing columns with NaN
+    chunk = chunk.reindex(columns=sample_cols)
+
+    # Binary: non-NaN AND non-empty-string → 1, otherwise → 0
+    # .notna() catches NaN (absent gene); (chunk != "") catches explicit empty strings
+    binary_chunk = (chunk.notna() & (chunk != "")).values.astype(np.uint8)
+    # binary_chunk shape: (chunk_genes × n_samples) → transpose to (n_samples × chunk_genes)
+    chunk_genes = binary_chunk.shape[0]
+    binary_matrix[:, gene_offset:gene_offset + chunk_genes] = binary_chunk.T
+
+    gene_offset += chunk_genes
+    chunks_done += 1
+    if chunks_done % 10 == 0:
+        msg(f"   Processed {gene_offset}/{n_genes} genes...")
+
+msg(f"   ✓ All {n_genes} genes processed")
+
+# Write matrix row-by-row to avoid another large in-memory copy from DataFrame to CSV
+msg(f"\n📝 Writing binary matrix → {output_matrix}")
+Path(output_matrix).parent.mkdir(parents=True, exist_ok=True)
+
+with open(output_matrix, "w", newline="") as fh:
+    writer = csv.writer(fh)
+    writer.writerow(["sample"] + gene_names)
+    for i, sample in enumerate(sample_cols):
+        writer.writerow([sample] + binary_matrix[i].tolist())
+
+msg(f"📊 Pangenome matrix: {n_samples} samples × {n_genes} genes")
+msg(f"   Core genes (present in ≥95% samples): "
+    f"{int((binary_matrix.mean(axis=0) >= 0.95).sum())}")
+msg(f"   Accessory genes (present in <95%): "
+    f"{int((binary_matrix.mean(axis=0) < 0.95).sum())}")
 msg("✅ Pangenome matrix saved")
 log.close()
