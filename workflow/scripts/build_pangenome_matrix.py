@@ -9,14 +9,6 @@ Memory-efficient chunked approach:
   4. Pass 2 (chunked): read 500 genes at a time, convert chunk to binary (uint8),
      fill the numpy matrix in place. String data is freed after each chunk.
   5. Write the transposed matrix (samples as rows) row-by-row to CSV.
-
-Why the original was OOM:
-  pd.read_csv (full Panaroo CSV) → 2484 samples × 10K genes of string objects
-  ≈ 24M Python strings × ~100 bytes each = ~2.5 GB
-  Then .notna() & (df != "") → another boolean copy = ~24 MB (fine on its own)
-  Then .astype(int) → another copy
-  Then .T → another copy
-  Peak: ~3–4 GB just to load and convert the strings.
 """
 
 import csv
