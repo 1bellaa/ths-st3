@@ -10,7 +10,6 @@ A Snakemake workflow for predicting *Mycobacterium tuberculosis* drug resistance
 - [Database Setup](#database-setup)
 - [Input & Output](#input-and-output)
 - [Usage](#usage)
-- [Pipeline Overview](#pipeline-overview)
 - [Workflow](#workflow)
 - [Configuration](#configuration)
 - [Skip Flags](#skip-flags)
@@ -367,21 +366,6 @@ sbatch run_snakemake.sbatch
     Note: This method runs Snakemake on a single heavy-duty node. Ensure the --cores count in your snakemake command matches the --cpus-per-task requested in the SBATCH headers.
 ```
 
-## Pipeline Overview
-
-```
-ENA Download → Trimmomatic → BWA-MEM → BCFtools
-↘ Bowtie2 (CARD screening)
-↘ SPAdes → Bakta → Panaroo
-
-→ SNP Matrix → Pangenome Matrix → SNP + Pangenome Matrix 
-
-→ ML Models (RF + LR)
-↘ ROC Curves
-↘ Best Hyperparameters
-↘ Top 10 Features
-```
-
 ## Workflow
 
 ### Overview
@@ -455,10 +439,6 @@ ENA Download → Quality Trimming → Alignment/Assembly → Feature Matrices �
                       ┌─────────────┐
                       │ ENA Download│
                       └──────┬──────┘
-                             │
-                      ┌──────▼───────┐
-                      │ Trimmomatic  │
-                      └──────┬───────┘
                              │
               ┌──────────────┼──────────────┐
               │              │              │
