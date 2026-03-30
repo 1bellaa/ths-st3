@@ -620,7 +620,7 @@ This pipeline is *made possible due to many execellent tools*, namely:
 
 - **CARD**: Alcock BP, Huynh W, Chalil R, et al. CARD 2023: expanded curation, support for machine learning, and resistome prediction at the Comprehensive Antibiotic Resistance Database. *Nucleic Acids Research*. 2023;51(D1):D690-D699. https://doi.org/10.1093/nar/gkac920
 
-- **TBDB**: [insert]
+- **TBDB**: Phelan, J. TBDB: Standard database for the TBProfiler tool. GitHub repository. 2024. https://github.com/jodyphelan/tbdb
 
 - **Bakta DB**: [insert]
 
