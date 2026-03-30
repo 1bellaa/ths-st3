@@ -89,33 +89,33 @@ Storage management via Snakemake temp() directives automatically removes raw FAS
 
 
 ## Directory Structure
-
 ```
 tb_pipeline/
-├── Snakefile                   # Main workflow
-├── config.yaml                 # All parameters (edit this)
-├── metadata.xlsx               # Sample metadata 
-├── master_data.xlsx            # Isolate information + resistance phenotypes
-├── reference/tbdb
-│   └── tbdb.fasta              # TB reference genome
+├── Snakefile                         # Main workflow
+├── config.yaml                       # All parameters (edit this)
+├── metadata.xlsx                     # Sample metadata 
+├── master_data.xlsx                  # Isolate information + resistance phenotypes
+├── reference/
+│   └── tbdb/
+│       └── tbdb.fasta                # TB reference genome
 ├── db/
 │   ├── card/
-│   │   ├── card.fasta          # CARD database FASTA
+│   │   ├── card.fasta                # CARD database FASTA
 │   │   ├── card.*.bt2          
-│   │   └── card_lengths.txt    # Gene lengths
-│   └── bakta_db/               # Bakta annotation database
+│   │   └── card_lengths.txt          # Gene lengths
+│   └── bakta_db/                     # Bakta annotation database
 └── workflow/
-    └──scripts/
-│   │  ├── download.py             # ENA FASTQ downloader
-│   │  ├── build_matrix.py         # SNP binary matrix builder
-│   │  ├── build_pangenome_matrix.py  # Panaroo → binary matrix
-│   │  ├── merge_metadata.py       # Attach resistance labels
-│   │  ├── card_screen.py
-    │  ├── filter_matrix.py        # filters the snp and pangenome matrix before merging
-    │  ├── summarize_card.py
-    │  ├── tbprofiler.py           # run the snp preprocessing   
-    │  └── run_ml.py               # RF + LR training & plots 
-    └──envs/
+    ├── scripts/
+    │   ├── download.py               # ENA FASTQ downloader
+    │   ├── build_matrix.py           # SNP binary matrix builder
+    │   ├── build_pangenome_matrix.py # Panaroo → binary matrix
+    │   ├── merge_metadata.py         # Attach resistance labels
+    │   ├── card_screen.py
+    │   ├── filter_matrix.py          # Filters the SNP and pangenome matrix before merging
+    │   ├── summarize_card.py
+    │   ├── tbprofiler.py             # Run the SNP preprocessing   
+    │   └── run_ml.py                 # RF + LR training & plots 
+    └── envs/
         ├── download.yaml
         ├── trim.yaml
         ├── align.yaml
