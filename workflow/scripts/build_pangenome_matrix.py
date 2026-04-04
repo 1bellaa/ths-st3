@@ -14,6 +14,9 @@ import pandas as pd
 pan_csv       = snakemake.input.pan_csv
 output_matrix = snakemake.output.matrix
 log_file      = snakemake.log[0]
+CHUNK_SIZE = snakemake.params.CHUNK_SIZE   # genes per chunk 
+
+META_COLS  = ["Non-unique Gene name", "Annotation"]
 
 Path(log_file).parent.mkdir(parents=True, exist_ok=True)
 log = open(log_file, "w")
@@ -24,9 +27,6 @@ def msg(m):
     log.flush()
 
 msg("🧬 Building pangenome matrix from Panaroo output...")
-
-META_COLS  = ["Non-unique Gene name", "Annotation"]
-CHUNK_SIZE = 500   # genes per chunk 
 
 # Get sample column names from the header row 
 # To know n_samples before allocating the numpy matrix

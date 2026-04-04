@@ -49,6 +49,12 @@ drugs:
 max_downloads: 3
 max_retries:  3
 
+# ── Chunk Size ──────────────────────────────
+# For memory efficiency when filtering large matrices (SNP or pangenome), 
+# process in chunks of this many genes/SNPs at a time.
+filter_matrix_chunk_size: 50
+build_pangenome_chunk_size: 500
+
 # ── Memory Limit ──────────────────────────────
 preprocess_mem_mb: 4000 
 card_mem_mb:       4000 

@@ -41,6 +41,7 @@ matrix_type   = snakemake.params.matrix_type   # "snp" or "pangenome"
 maf_min       = snakemake.params.maf_min
 maf_max       = snakemake.params.maf_max
 log_file      = snakemake.log[0]
+CHUNK_SIZE    = snakemake.params.CHUNK_SIZE   # rows per chunk for memory-efficient processing, can adjust based on available RAM
 
 Path(log_file).parent.mkdir(parents=True, exist_ok=True)
 log = open(log_file, "w")
@@ -49,8 +50,6 @@ def msg(m):
     print(m, flush=True)
     log.write(m + "\n")
     log.flush()
-
-CHUNK_SIZE = 50   # rows per chunk for memory-efficient processing, can adjust based on available RAM
 
 msg("=" * 60)
 msg(f"🔬 Filtering {matrix_type} matrix")

@@ -6,13 +6,7 @@ Memory-efficient two-pass approach:
   Pass 1: Read all VCFs once to collect the set of all unique SNP sites.
           Only store a (sample_name, vcf_path) list — NOT per-sample site data.
   Pass 2: Re-read each VCF and write one CSV row at a time directly to disk.
-          Peak RAM = one row (n_sites integers) at a time, not the full matrix.
-
-Why the original was OOM:
-  sample_sites dict  → 2484 samples × ~2000 site-tuples × ~200 bytes = ~1 GB
-  matrix_data list   → 2484 × n_sites Python ints                    = ~1–2 GB
-  pd.DataFrame(...)  → another full copy of the matrix               = ~1–2 GB
-  Total peak: 3–5 GB just to build and write the matrix.
+          RAM = one row (n_sites integers) at a time, not the full matrix.
 """
 
 import csv
