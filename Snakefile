@@ -27,7 +27,7 @@ Storage management:
   - VCFs              → kept until cleanup_vcfs rule runs after snp_matrix.csv
   - Assembly/annot dirs → deleted by cleanup_pangenome_intermediates
 
-Skip flags (set in config.yaml or with --config on the command line):
+Skip flags (set in config.yaml):
   skip_assembly:   true  → skip SPAdes
   skip_annotation: true  → skip Bakta  (also forces skip_pangenome)
   skip_pangenome:  true  → skip Panaroo + pangenome matrix + pan ML inputs
@@ -38,6 +38,7 @@ Skip flags (set in config.yaml or with --config on the command line):
 import pandas as pd
 from pathlib import Path
 import os
+from logging import config
 
 # CONFIGURATION 
 configfile: "config.yaml"
@@ -71,17 +72,6 @@ SKIP_ML         = config.get("skip_ml",         False)
 
 if SKIP_ASSEMBLY or SKIP_ANNOTATION:
     SKIP_PANGENOME = True
-
-# Samples for CARD screening — read from existing input_snp.csv if available,
-# otherwise fall back to SAMPLES (full pipeline run)
-# _input_snp_path = Path(config["results_dir"]) / "ml" / "input_snp.csv"
-# if _input_snp_path.exists():
-#     import pandas as _pd
-#     CARD_SAMPLES = list(_pd.read_csv(_input_snp_path, index_col=0).index.astype(str))
-#     print(f"📊 CARD_SAMPLES loaded from input_snp.csv: {len(CARD_SAMPLES)} samples")
-# else:
-#     CARD_SAMPLES = SAMPLES
-#     print(f"📊 CARD_SAMPLES using SAMPLES: {len(CARD_SAMPLES)} samples")
 
 if SKIP_PANGENOME and SKIP_CARD:
     ML_INPUT_TYPES = ["snp"]
@@ -174,7 +164,7 @@ print(f"   Sample→isolate map written to {_map_path}")
 CARD_SAMPLES = SAMPLES 
 print(f"📊 CARD_SAMPLES: total pool is {len(CARD_SAMPLES)} samples")
 
-# ── Wildcard constraints ───────────────────────────────────────────────────────
+# Wildcard constraints 
 wildcard_constraints:
     sample     = r"[A-Za-z0-9]+",
     drug       = r"[a-z]+",
@@ -244,8 +234,6 @@ rule all:
     input:
         str(ML_DIR / "snp_matrix_filtered.csv"),
         card_targets(),
-        # assembly_targets(),
-        # annotation_targets(),
         pangenome_targets(),
         ml_targets(),
         plot_targets(),
@@ -265,10 +253,10 @@ rule download_fastq:
         metadata_file = METADATA,
     log:
         LOGS_DIR / "download" / "{sample}.log",
-    threads: 1
-    retries: 3
+    threads: config.get("download_threads", 4)
+    retries: config.get("max_retries", 3)
     resources:
-        downloads = 3, # change concurrent download
+        downloads = config.get("max_downloads", 3),
     conda:
         "tb_download"
     script:
@@ -295,11 +283,13 @@ rule preprocess_sample:
         ref     = REF,
     log:
         LOGS_DIR / "preprocess" / "{sample}.log",
-    threads: config.get("tbprofiler_threads", 4)
+    threads: config.get("preprocess_threads", 4)
+    resources:
+        mem_mb = config.get("preprocess_mem_mb", 4000),
     conda:
         "tb_align"
     script:
-        "workflow/scripts/tbprofiler.py"
+        "workflow/scripts/preprocess.py"
 
 
 # ===========================================================
@@ -347,7 +337,9 @@ if not SKIP_CARD:
             binary_matrix = RESULTS_DIR / "card_binary_matrix.csv",
         log:
             LOGS_DIR / "card_summary.log",
-        threads: 1
+        threads: config.get("matrix_threads", 4)
+        resources:
+            mem_mb = config.get("matrix_mem_mb", 4000),
         conda:
             "tb_ml"
         script:
@@ -375,7 +367,6 @@ if not SKIP_ASSEMBLY:
             mem_mb = config.get("spades_mem_mb", 16000),
         conda:
             "tb_assembly"
-        # --only-assembler later if we want to skip read error correction (but it seems to help even with clean Illumina data, so leaving it in for now)
         shell:
             """
             spades.py -1 {input.r1} -2 {input.r2} \
@@ -425,6 +416,8 @@ if not SKIP_PANGENOME:
         log:
             LOGS_DIR / "panaroo.log",
         threads: config.get("panaroo_threads", 8)
+        resources:
+            mem_mb = config.get("panaroo_mem_mb", 4000),
         conda:
             "tb_pangenome"
         shell:
@@ -440,6 +433,9 @@ if not SKIP_PANGENOME:
         output:
             matrix = ML_DIR / "pangenome_matrix.csv",
         log:   LOGS_DIR / "pangenome_matrix.log"
+        threads: config.get("matrix_threads", 8)
+        resources:
+            mem_mb = config.get("matrix_mem_mb", 4000),
         conda: "tb_ml"
         script: "workflow/scripts/build_pangenome_matrix.py"
 
@@ -454,6 +450,8 @@ if not SKIP_PANGENOME:
             matrix_type = "pangenome",
         log:     LOGS_DIR / "filter_pangenome_matrix.log"
         threads: config.get("matrix_threads", 8)
+        resources:
+            mem_mb = config.get("matrix_mem_mb", 4000),
         conda:   "tb_ml"
         script:  "workflow/scripts/filter_matrix.py"
 
@@ -478,6 +476,8 @@ rule build_snp_matrix:
         vcf_dir = str(VCF_DIR),
     log:     LOGS_DIR / "snp_matrix.log"
     threads: config.get("matrix_threads", 8)
+    resources:
+        mem_mb = config.get("matrix_mem_mb", 4000),
     conda:   "tb_ml"
     script:  "workflow/scripts/build_matrix.py"
 
@@ -489,10 +489,12 @@ rule filter_snp_matrix:
         filtered = ML_DIR / "snp_matrix_filtered.csv",
     params:
         maf_min     = config.get("snp_maf_min", 0.005),
-        maf_max     = config.get("snp_maf_max", 0.995),
+        maf_max     = config.get("snp_maf_max", 1.0),
         matrix_type = "snp",
     log:     LOGS_DIR / "filter_snp_matrix.log"
     threads: config.get("matrix_threads", 8)
+    resources:
+        mem_mb = config.get("matrix_mem_mb", 4000),
     conda:   "tb_ml"
     script:  "workflow/scripts/filter_matrix.py"
 
@@ -551,7 +553,6 @@ def _merge_inputs(wildcards):
         else str(ML_DIR / "snp_matrix_filtered.csv")
     )
     return d
-
 
 rule merge_metadata:
     input:
@@ -621,7 +622,7 @@ if not SKIP_ML:
             n_iter       = config.get("lr_n_iter", 20),
             cv_folds     = config.get("cv_folds", 5),
         log:     LOGS_DIR / "ml" / "{input_type}_{drug}_lr.log"
-        threads: 1
+        threads: config.get("ml_threads", 4)
         #conda:   "tb_ml"
         script:  "workflow/scripts/run_ml.py"
 

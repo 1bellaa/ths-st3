@@ -1,6 +1,6 @@
 # TB Drug Resistance Genomics Pipeline — Configuration
 
-# ── Skip if u want
+# ── Skip flags on certain steps ──────────────────────────────
 
 skip_assembly: false
 skip_annotation: false
@@ -34,7 +34,7 @@ card_lengths:       "db/card/card_lengths.txt"
 bakta_db: "db/bakta_db/db-light"
 
 # Metadata Excel file (must contain columns: ena_run, ena_experiment, ena_sample, country)
-# Drug resistance phenotype sheets per drug (columns: isolate name, resistance phenotype (pDST))
+# Master data file with drug resistance phenotype sheets per drug (columns: isolate name, resistance phenotype (pDST))
 metadata: "metadata.xlsx"
 master_data: "master_data.xlsx"
 
@@ -45,18 +45,27 @@ drugs:
   - ethambutol
   - streptomycin
 
+# ── Downloads ──────────────────────────────
+max_downloads: 3
+max_retries:  3
+
+# ── Memory Limit ──────────────────────────────
+preprocess_mem_mb: 4000 
+card_mem_mb:       4000 
+matrix_mem_mb:     4000
+spades_mem_mb:    8000 
+bakta_mem_mb:     8000 
+panaroo_mem_mb:   16000
+
 # ── Threads ──────────────────────────────
-trim_threads:     4
-tbprofiler_threads: 4
-bwa_threads:      8
-bowtie2_threads:  4
-spades_threads:   4
-spades_mem_mb:    8000 # memory limit 
-bakta_threads:    8
-bakta_mem_mb:     8000 # memory limit
-panaroo_threads:  8
-matrix_threads:   4
-ml_threads:       4
+download_threads:   4
+preprocess_threads: 4
+bowtie2_threads:    4
+spades_threads:     4 
+bakta_threads:      8
+panaroo_threads:    8
+matrix_threads:     4
+ml_threads:         4
 
 # ── Trimmomatic Parameters ───────────────────────────────────
 trimmomatic_adapter:      "TruSeq3-PE-2.fa"
