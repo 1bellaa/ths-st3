@@ -432,6 +432,8 @@ if not SKIP_PANGENOME:
             pan_csv = RESULTS_DIR / "pangenome" / "gene_presence_absence.csv",
         output:
             matrix = ML_DIR / "pangenome_matrix.csv",
+        params:
+            CHUNK_SIZE = config.get("build_pangenome_chunk_size", 500),  # genes per chunk for memory-efficient processing
         log:   LOGS_DIR / "pangenome_matrix.log"
         threads: config.get("matrix_threads", 8)
         resources:
@@ -447,6 +449,7 @@ if not SKIP_PANGENOME:
         params:
             maf_min     = config.get("pangenome_maf_min", 0.01),
             maf_max     = config.get("pangenome_maf_max", 0.99),
+            CHUNK_SIZE  = config.get("filter_matrix_chunk_size", 50),
             matrix_type = "pangenome",
         log:     LOGS_DIR / "filter_pangenome_matrix.log"
         threads: config.get("matrix_threads", 8)
@@ -626,44 +629,43 @@ if not SKIP_ML:
         #conda:   "tb_ml"
         script:  "workflow/scripts/run_ml.py"
 
-
-    rule plot_combined_roc:
-        input:
-            rf_roc_data = ML_DIR / "{input_type}_{drug}_rf_roc_data.csv",
-            lr_roc_data = ML_DIR / "{input_type}_{drug}_lr_roc_data.csv",
-        output:
-            combined_roc = ML_DIR / "{input_type}_{drug}_combined_roc.png",
-        params:
-            drug       = "{drug}",
-            input_type = "{input_type}",
-        log:
-            LOGS_DIR / "ml" / "{input_type}_{drug}_combined_roc.log",
-        #conda:
-        #    "tb_ml"
-        script:
-            "workflow/scripts/plot_combined_roc.py"
-
-    rule plot_model_summary:
-        input:
-            metrics_files = expand(
-                str(ML_DIR / "{{input_type}}_{drug}_{model}_metrics.csv"),
-                drug=DRUGS, model=["rf", "lr"],
-            ),
-        output:
-            summary_plot = ML_DIR / "{input_type}_model_summary.png",
-        params:
-            input_type = "{input_type}",
-            drugs      = DRUGS,
-        log:
-            LOGS_DIR / "ml" / "{input_type}_model_summary.log",
-        # conda:
-        #     "tb_ml"
-        script:
-            "workflow/scripts/plot_model_summary.py"
-
 # ===========================================================
 # STEP 12: VISUALIZATION & ANNOTATION
 # ===========================================================
+rule plot_combined_roc:
+    input:
+        rf_roc_data = ML_DIR / "{input_type}_{drug}_rf_roc_data.csv",
+        lr_roc_data = ML_DIR / "{input_type}_{drug}_lr_roc_data.csv",
+    output:
+        combined_roc = ML_DIR / "{input_type}_{drug}_combined_roc.png",
+    params:
+        drug       = "{drug}",
+        input_type = "{input_type}",
+    log:
+        LOGS_DIR / "ml" / "{input_type}_{drug}_combined_roc.log",
+    #conda:
+    #    "tb_ml"
+    script:
+        "workflow/scripts/plot_combined_roc.py"
+
+rule plot_model_summary:
+    input:
+        metrics_files = expand(
+            str(ML_DIR / "{{input_type}}_{drug}_{model}_metrics.csv"),
+            drug=DRUGS, model=["rf", "lr"],
+        ),
+    output:
+        summary_plot = ML_DIR / "{input_type}_model_summary.png",
+    params:
+        input_type = "{input_type}",
+        drugs      = DRUGS,
+    log:
+        LOGS_DIR / "ml" / "{input_type}_model_summary.log",
+    # conda:
+    #     "tb_ml"
+    script:
+        "workflow/scripts/plot_model_summary.py"
+
 rule annotate_features:
     input:
         feature_files = expand(
