@@ -47,7 +47,7 @@ def main():
     out_summary.parent.mkdir(parents=True, exist_ok=True)
     out_matrix.parent.mkdir(parents=True, exist_ok=True)
 
-    # ── Tracking stats (no giant list in memory) ──────────────────────────────
+    # ── Tracking stats  
     # binary_hits: sample → set of detected gene names
     binary_hits   = {}
     # gene_samples: gene → count of samples (for prevalence log)
@@ -61,7 +61,7 @@ def main():
         "coverage_percent", "mean_depth",
     ]
 
-    # ── Stream long-format rows directly to CSV ───────────────────────────────
+    # Stream long-format rows directly to CSV 
     with open(out_summary, "w", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=SUMMARY_COLS)
         writer.writeheader()
@@ -94,7 +94,7 @@ def main():
 
                 total_pairs += 1
 
-                # Write only rows with any reads (saves disk space too)
+                # Write only rows with any reads 
                 if num_reads > 0 or detected:
                     writer.writerow({
                         "sample":           sample,
@@ -129,7 +129,7 @@ def main():
 
     log(f"\n✅ Long-format summary → {out_summary}")
 
-    # ── Binary presence/absence matrix ────────────────────────────────────────
+    # Binary presence/absence matrix 
     log("\n📐 Building binary presence/absence matrix...")
 
     all_genes = sorted(gene_samples.keys())
