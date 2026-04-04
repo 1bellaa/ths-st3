@@ -171,6 +171,20 @@ bars_s = axes[0].bar(x, split_df["Susceptible (S)"], width, label="Susceptible",
 bars_r = axes[0].bar(x, split_df["Resistant (R)"],   width,
                      bottom=split_df["Susceptible (S)"], label="Resistant",
                      color="#e74c3c", alpha=0.85)
+# Annotate susceptible counts (middle of green bar)
+for i, (s_val, r_val) in enumerate(zip(split_df["Susceptible (S)"], split_df["Resistant (R)"])):
+    # S label — centred in green segment
+    axes[0].text(i, s_val / 2, f"S={s_val}",
+                 ha="center", va="center", fontsize=9,
+                 fontweight="bold", color="white")
+    # R label — centred in red segment
+    axes[0].text(i, s_val + r_val / 2, f"R={r_val}",
+                 ha="center", va="center", fontsize=9,
+                 fontweight="bold", color="white")
+    # Total n= on top of bar
+    axes[0].text(i, s_val + r_val + 5, f"n={s_val + r_val}",
+                 ha="center", va="bottom", fontsize=9,
+                 fontweight="bold", color="black")
 axes[0].set_xticks(list(x))
 axes[0].set_xticklabels(split_df["split"])
 axes[0].set_ylabel("Sample count")
@@ -235,7 +249,6 @@ if model_type == "rf":
 
 else:  # lr
     base_model = Pipeline([
-        ("scaler", MaxAbsScaler()),
         ("lr",     LogisticRegression(random_state=RANDOM_STATE)),
     ])
     param_dist = {
@@ -243,7 +256,7 @@ else:  # lr
         "lr__penalty":      ["elasticnet"],
         "lr__solver":       ["saga"],
         "lr__l1_ratio":     uniform(0, 1),
-        "lr__max_iter":     [500, 1000], # 500, 1000 ---girl edit this later ‼️‼️‼️
+        "lr__max_iter":     [500, 1000], 
         "lr__class_weight": ["balanced"],
     }
     X_tr, X_v, X_te = X_train, X_val, X_test
@@ -265,6 +278,57 @@ best_params = search.best_params_
 msg(f"  Best CV AUC: {search.best_score_:.4f}")
 msg(f"  Params: {best_params}")
 
+# Statsmodels p-values for LR (fitted after sklearn search)
+sm_summary = None
+if model_type == "lr":
+    X_tr_sm_c = sm.add_constant(X_train.values)
+
+    msg("\n🔧 Fitting statsmodels Logit for p-values...")
+    sm_model = sm.Logit(y_train, X_tr_sm_c)
+
+    try:
+        sm_result = sm_model.fit(maxiter=500, disp=False)
+    except np.linalg.LinAlgError:
+        msg("⚠️  Singular Hessian — retrying with BFGS optimizer...")
+        try:
+            sm_result = sm_model.fit(maxiter=500, disp=False, method="bfgs")
+        except Exception as e:
+            msg(f"⚠️  statsmodels fit failed entirely ({e}). P-values will be NaN.")
+            sm_result = None
+
+    if sm_result is not None:
+        pvals    = sm_result.pvalues[1:]
+        conf_int = sm_result.conf_int(alpha=0.05).iloc[1:]
+        sm_coefs = sm_result.params[1:]
+
+        n = min(len(sm_coefs), len(pvals), len(conf_int), len(feature_names))
+        if n < len(feature_names):
+            msg(f"⚠️  statsmodels returned {n} params vs {len(feature_names)} features — truncating")
+
+        sm_summary = pd.DataFrame({
+            "feature":     feature_names[:n],
+            "coef":        sm_coefs.values[:n],
+            "pvalue":      pvals.values[:n],
+            "CI_lower":    conf_int.iloc[:n, 0].values,
+            "CI_upper":    conf_int.iloc[:n, 1].values,
+            "significant": pvals.values[:n] < 0.05,
+        }).sort_values("pvalue")
+        msg(f"\n📊 Significant features (p < 0.05): {sm_summary['significant'].sum()}")
+        msg(sm_summary[sm_summary["significant"]].to_string(index=False))
+        
+    else:
+        # Fallback: use sklearn coefficients, mark p-values as NaN
+        sk_coefs = best.named_steps["lr"].coef_[0]
+        sm_summary = pd.DataFrame({
+            "feature":     feature_names,
+            "coef":        sk_coefs,
+            "pvalue":      np.nan,
+            "CI_lower":    np.nan,
+            "CI_upper":    np.nan,
+            "significant": False,
+        }).sort_values("coef", key=np.abs, ascending=False)
+        msg("⚠️  Using sklearn coefficients (no p-values available).")
+
 # PREDICT AND CALCULATE METRICS ON ALL SETS
 sets = {
     "val":   (X_v,  y_val),
@@ -281,17 +345,24 @@ for split_name, (Xs, ys) in sets.items():
 # FEATURE IMPORTANCE
 feat_names = list(feature_names)
 if model_type == "rf":
-    importances = best.named_steps['rf'].feature_importances_
-    imp_label   = "Importance"
+    importances  = best.named_steps['rf'].feature_importances_
+    imp_label    = "Importance"
+    top_idx      = np.argsort(np.abs(importances))[::-1][:10]
+    top_features = pd.DataFrame({
+        "feature":    [feat_names[i] for i in top_idx],
+        "importance": importances[top_idx],
+    })
 else:
-    importances = best.named_steps['lr'].coef_.flatten()
-    imp_label   = "Coefficient"
-
-top_idx      = np.argsort(np.abs(importances))[::-1][:10]
-top_features = pd.DataFrame({
-    "feature":    [feat_names[i] for i in top_idx],
-    "importance": importances[top_idx],
-})
+    imp_label = "Coefficient"
+    top_sm = sm_summary.head(10)
+    top_features = pd.DataFrame({
+        "feature":    top_sm["feature"].values,
+        "importance": top_sm["coef"].values,
+        "pvalue":     top_sm["pvalue"].values,
+        "CI_lower":   top_sm["CI_lower"].values,
+        "CI_upper":   top_sm["CI_upper"].values,
+        "significant":top_sm["significant"].values,
+    })
 
 out_features_csv = snakemake.output.features_csv
 top_features["drug"]       = drug
