@@ -1,186 +1,295 @@
 """
 plot_feature_venn.py
 ====================
-Reads top-10 feature CSVs (from run_ml.py) for all drugs for a given
-model + input_type. Produces:
-
-  1. Membership matrix plot — which features appear in which drugs
-  2. CSV of all features with drug memberships + summed importance
-
-Run standalone:
-    python plot_feature_venn.py \
-        --ml_dir results/ml \
-        --input_type snp \
-        --model rf \
-        --drugs isoniazid rifampicin ethambutol streptomycin \
-        --out results/plots
+Usage:
+    python plot_feature_venn.py --ml-dir /path/to/ml/results --out-dir /path/to/output
 """
 
 import argparse
-import sys
 from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
-import numpy as np
 import pandas as pd
+from venn import venn
 
-# ── Mode: Snakemake or CLI ────────────────────────────────────────────────────
-try:
-    feature_files = snakemake.input.feature_files
-    out_plot      = snakemake.output.venn_plot
-    out_csv       = snakemake.output.venn_csv
-    model_type    = snakemake.params.model
-    input_type    = snakemake.params.input_type
-    drugs         = snakemake.params.drugs
-    log_file      = snakemake.log[0]
-    Path(log_file).parent.mkdir(parents=True, exist_ok=True)
-    log = open(log_file, "w")
-    def msg(m): print(m); log.write(m+"\n"); log.flush()
-except NameError:
-    p = argparse.ArgumentParser()
-    p.add_argument("--ml_dir",     required=True)
-    p.add_argument("--input_type", required=True)
-    p.add_argument("--model",      default="rf")
-    p.add_argument("--drugs",      nargs="+",
-                   default=["isoniazid","rifampicin","ethambutol","streptomycin"])
-    p.add_argument("--out",        default="results/plots")
-    args = p.parse_args()
-    ml_dir     = Path(args.ml_dir)
-    input_type = args.input_type
-    model_type = args.model
-    drugs      = args.drugs
-    feature_files = [str(ml_dir / f"{input_type}_{d}_{model_type}_features.csv")
-                     for d in drugs]
-    out_plot   = str(Path(args.out) / f"{input_type}_{model_type}_feature_venn.png")
-    out_csv    = str(Path(args.out) / f"{input_type}_{model_type}_feature_venn.csv")
-    Path(args.out).mkdir(parents=True, exist_ok=True)
-    def msg(m): print(m, flush=True)
+# ── CLI ──────────────────────────────────────────────────────────────────────
+parser = argparse.ArgumentParser()
+parser.add_argument("--ml-dir", required=True)
+parser.add_argument("--out-dir", default="results/plots")
+args = parser.parse_args()
 
-msg(f"📊 Feature overlap — {model_type.upper()} [{input_type}]")
+ml_dir = Path(args.ml_dir)
+out_dir = Path(args.out_dir)
+out_dir.mkdir(parents=True, exist_ok=True)
 
-# ── Load feature CSVs ─────────────────────────────────────────────────────────
-drug_features = {}   # drug → set of feature names
-drug_imp      = {}   # drug → {feature: abs_importance}
+# ── DRUGS & INPUT TYPES ──────────────────────────────────────────────────────
+drugs = ["isoniazid", "rifampicin", "ethambutol", "streptomycin"]
+input_types = ["snp", "pan", "card", "snp_pan", "pan_card", "snp_card", "snp_pan_card"]
 
-for f, drug in zip(feature_files, drugs):
-    try:
-        df = pd.read_csv(f)
-        if df.empty or "feature" not in df.columns:
-            msg(f"   ⚠️  {drug}: empty or missing 'feature' column")
-            continue
-        drug_features[drug] = set(df["feature"].tolist())
-        drug_imp[drug]      = dict(zip(df["feature"], df["importance"].abs()))
-        msg(f"   {drug}: {len(drug_features[drug])} features")
-    except Exception as e:
-        msg(f"   ⚠️  {drug}: {e}")
+def msg(m): print(m, flush=True)
 
-if not drug_features:
-    for out in [out_plot]:
-        fig, ax = plt.subplots(figsize=(5,3))
-        ax.text(0.5,0.5,"No feature data",ha="center",va="center",
-                transform=ax.transAxes,color="grey")
-        ax.axis("off")
-        plt.savefig(out,dpi=120,bbox_inches="tight")
-        plt.close()
-    pd.DataFrame().to_csv(out_csv, index=False)
-    sys.exit(0)
+# ── Core function ────────────────────────────────────────────────────────────
+def process_model(feature_files, model_name, out_plot, out_csv, input_type):
+    msg(f"\n📊 {input_type.upper()} — {model_name}")
 
-present_drugs = sorted(drug_features.keys())
-all_features  = set().union(*drug_features.values())
+    drug_features = {}
+    drug_imp = {}
 
-# ── Build membership table ────────────────────────────────────────────────────
-records = []
-for feat in sorted(all_features):
-    membership    = {d: (feat in drug_features[d]) for d in present_drugs}
-    n_present     = sum(membership.values())
-    imp_sum       = sum(drug_imp[d].get(feat, 0) for d in present_drugs)
-    records.append({
-        "feature":        feat,
-        "n_drugs":        n_present,
-        "drugs":          ", ".join(d for d in present_drugs if membership[d]),
-        "importance_sum": round(imp_sum, 6),
-        **{f"in_{d}": membership[d] for d in present_drugs},
-    })
+    for f, drug in zip(feature_files, drugs):
+        try:
+            df = pd.read_csv(f)
+            if df.empty or "gene_name" not in df.columns:
+                msg(f"⚠️ {drug}: empty or missing 'gene_name'")
+                continue
+            grouped = df.groupby("gene_name")["importance"].max()
+            drug_features[drug] = set(grouped.index)
+            drug_imp[drug] = grouped.to_dict()
+            msg(f"✔ {drug}: {len(drug_features[drug])} features")
+        except Exception as e:
+            msg(f"⚠️ {drug}: {e}")
 
-feat_df = pd.DataFrame(records).sort_values(
-    ["n_drugs","importance_sum"], ascending=[False,False]
-).reset_index(drop=True)
-feat_df.to_csv(out_csv, index=False)
-msg(f"   Unique features: {len(feat_df)}")
-msg(f"   In ALL {len(present_drugs)} drugs: {(feat_df['n_drugs']==len(present_drugs)).sum()}")
+    if not drug_features:
+        pd.DataFrame().to_csv(out_csv, index=False)
+        return
 
-# ── Plot: membership matrix + importance bar ──────────────────────────────────
-DRUG_COLORS = ["#e74c3c","#e67e22","#2ecc71","#3498db",
-               "#9b59b6","#1abc9c","#e91e63","#ff9800"]
-color_map = {d: DRUG_COLORS[i % len(DRUG_COLORS)] for i,d in enumerate(present_drugs)}
+    present_drugs = list(drug_features.keys())
+    all_genes = set().union(*drug_features.values())
 
-features_ordered = feat_df["feature"].tolist()
-n_feats   = len(features_ordered)
-n_drugs   = len(present_drugs)
-fig_h     = max(8, n_feats * 0.28 + 3)
+    # ── Membership table ────────────────────────────────────────────────────
+    records = []
+    for gene in all_genes:
+        membership = {d: gene in drug_features[d] for d in present_drugs}
+        n_present = sum(membership.values())
+        imp_max = max([drug_imp[d].get(gene, 0) for d in present_drugs])
+        records.append({
+            "gene": gene,
+            "n_drugs": n_present,
+            "importance_max": round(imp_max, 5),
+            **{f"in_{d}": membership[d] for d in present_drugs}
+        })
 
-fig = plt.figure(figsize=(14, fig_h))
-gs  = fig.add_gridspec(1, 2, width_ratios=[2, 1], wspace=0.04)
-ax_m = fig.add_subplot(gs[0])
-ax_b = fig.add_subplot(gs[1])
+    feat_df = pd.DataFrame(records).sort_values(
+        ["importance_max", "n_drugs"], ascending=[False, False]
+    )
+    feat_df.to_csv(out_csv, index=False)
 
-y_pos = np.arange(n_feats)
+    # ── Venn ───────────────────────────────────────────────────────────────
+    venn_dict = {d: drug_features[d] for d in present_drugs}
+    plt.figure(figsize=(8, 8))
+    venn(venn_dict)
+    plt.title(f"{model_name} — {input_type}", fontsize=12)
 
-for xi, drug_name in enumerate(present_drugs):
-    for yi, feat in enumerate(features_ordered):
-        in_drug = feat_df.loc[yi, f"in_{drug_name}"]
-        if in_drug:
-            ax_m.scatter(xi, yi, s=90, color=color_map[drug_name],
-                         zorder=3, edgecolors="white", linewidths=0.5)
-        else:
-            ax_m.scatter(xi, yi, s=35, color="#ecf0f1",
-                         zorder=2, edgecolors="#bdc3c7", linewidths=0.5)
+    # Annotation: max importance + shared genes
+    common_genes = [g for g in all_genes if all(g in drug_features[d] for d in present_drugs)]
+    shared_genes = [g for g in all_genes if sum(g in drug_features[d] for d in present_drugs) >= 2 and g not in common_genes]
 
-# Connect dots across drugs for multi-drug features
-for yi, feat in enumerate(features_ordered):
-    xs = [xi for xi, d in enumerate(present_drugs)
-          if feat_df.loc[yi, f"in_{d}"]]
-    if len(xs) > 1:
-        ax_m.hlines(yi, min(xs), max(xs), colors="#7f8c8d", lw=1.5, zorder=1)
+    if common_genes:
+        print(f"\n🔹 {model_name} — {input_type} — Shared in ALL drugs:")
+        for g in common_genes:
+            max_val = 0
+            max_drug = ""
+            for d in present_drugs:
+                val = drug_imp[d].get(g, 0)
+                if val > max_val:
+                    max_val = val
+                    max_drug = d
+            print(f"• {g}: max importance {max_val:.5f} in {max_drug}")
 
-ax_m.set_xlim(-0.5, n_drugs - 0.5)
-ax_m.set_ylim(-0.5, n_feats - 0.5)
-ax_m.set_xticks(range(n_drugs))
-ax_m.set_xticklabels([d.upper()[:4] for d in present_drugs], fontsize=9, fontweight="bold")
-ax_m.set_yticks(y_pos)
-ax_m.set_yticklabels(features_ordered, fontsize=7)
-ax_m.set_xlabel("Drug", fontsize=10)
-ax_m.set_title("Feature × Drug Membership", fontweight="bold", fontsize=11)
-ax_m.grid(True, axis="x", alpha=0.15)
-ax_m.invert_yaxis()
+    common_annot = [f"• {g} ({max([drug_imp[d].get(g,0) for d in present_drugs]):.5f}, {','.join([d for d in present_drugs if g in drug_features[d]])})" for g in common_genes[:8]]
+    shared_annot = [f"• {g} ({max([drug_imp[d].get(g,0) for d in present_drugs if g in drug_features[d]]):.5f}, {','.join([d for d in present_drugs if g in drug_features[d]])})" for g in shared_genes[:12]]
 
-# Importance bar
-imp_vals   = feat_df["importance_sum"].values
-n_drug_vals = feat_df["n_drugs"].values
-bar_colors = [DRUG_COLORS[min(v-1, len(DRUG_COLORS)-1)] for v in n_drug_vals]
-ax_b.barh(y_pos, imp_vals, color=bar_colors, alpha=0.85, edgecolor="white")
-ax_b.set_xlabel("Σ |Importance|", fontsize=9)
-ax_b.set_yticks(y_pos)
-ax_b.set_yticklabels([])
-ax_b.set_title("Summed Importance", fontweight="bold", fontsize=11)
-ax_b.grid(True, axis="x", alpha=0.3)
-ax_b.invert_yaxis()
+    annotation_text = []
+    if common_annot:
+        annotation_text.append("Shared in ALL drugs:")
+        annotation_text += common_annot
+    if shared_annot:
+        annotation_text.append("\nShared (≥2 drugs):")
+        annotation_text += shared_annot
 
-legend_patches = [
-    mpatches.Patch(color=DRUG_COLORS[i], alpha=0.85,
-                   label=f"In {i+1} drug{'s' if i>0 else ''}")
-    for i in range(min(n_drugs, 4))
-]
-ax_b.legend(handles=legend_patches, fontsize=8, loc="lower right", framealpha=0.85)
+    if annotation_text:
+        plt.gcf().text(1.05, 0.2, "\n".join(annotation_text), fontsize=8, va="top")
 
-fig.suptitle(
-    f"Top-10 Feature Overlap Across Drugs\n{model_type.upper()} — {input_type}",
-    fontweight="bold", fontsize=13, y=1.01,
-)
-plt.savefig(out_plot, dpi=180, bbox_inches="tight")
-plt.close()
-msg(f"✅ Feature venn → {out_plot}")
-try: log.close()
-except: pass
+    plt.savefig(out_plot, dpi=180, bbox_inches="tight")
+    plt.close()
+    msg(f"✅ Saved → {out_plot}")
+
+
+# ── Combined per model ────────────────────────────────────────────────────
+def process_combined_model(all_feature_files, model_name, out_plot, out_csv):
+    msg(f"\n📊 Combined {model_name} — all input types")
+
+    drug_features = {}
+    drug_imp = {}
+
+    for drug in drugs:
+        combined = {}
+        for files in all_feature_files:
+            try:
+                df = pd.read_csv(files[drug])
+                if df.empty or "gene_name" not in df.columns:
+                    continue
+                grouped = df.groupby("gene_name")["importance"].max()
+                for g, v in grouped.items():
+                    combined[g] = max(v, combined.get(g, 0))
+            except:
+                continue
+        drug_features[drug] = set(combined.keys())
+        drug_imp[drug] = combined
+
+    all_genes = set().union(*drug_features.values())
+
+    # Membership table
+    records = []
+    for gene in all_genes:
+        membership = {d: gene in drug_features[d] for d in drugs}
+        n_present = sum(membership.values())
+        imp_max = max([drug_imp[d].get(gene, 0) for d in drugs])
+        records.append({
+            "gene": gene,
+            "n_drugs": n_present,
+            "importance_max": round(imp_max, 5),
+            **{f"in_{d}": membership[d] for d in drugs}
+        })
+
+    feat_df = pd.DataFrame(records).sort_values(
+        ["importance_max", "n_drugs"], ascending=[False, False]
+    )
+    feat_df.to_csv(out_csv, index=False)
+
+    # Venn plot
+    venn_dict = {d: drug_features[d] for d in drugs}
+    plt.figure(figsize=(10, 10))
+    venn(venn_dict)
+    plt.title(f"{model_name} — COMBINED INPUTS", fontsize=13)
+
+    common_genes = [g for g in all_genes if all(g in drug_features[d] for d in drugs)]
+    shared_genes = [g for g in all_genes if sum(g in drug_features[d] for d in drugs) >= 2 and g not in common_genes]
+
+    common_annot = [f"• {g} ({max([drug_imp[d].get(g,0) for d in drugs]):.5f}, {','.join([d for d in drugs if g in drug_features[d]])})" for g in common_genes[:8]]
+    shared_annot = [f"• {g} ({max([drug_imp[d].get(g,0) for d in drugs if g in drug_features[d]]):.5f}, {','.join([d for d in drugs if g in drug_features[d]])})" for g in shared_genes[:12]]
+
+    annotation_text = []
+    if common_annot:
+        annotation_text.append("Shared in ALL drugs:")
+        annotation_text += common_annot
+    if shared_annot:
+        annotation_text.append("\nShared (≥2 drugs):")
+        annotation_text += shared_annot
+
+    if annotation_text:
+        plt.gcf().text(1.05, 0.2, "\n".join(annotation_text), fontsize=8, va="top")
+
+    plt.savefig(out_plot, dpi=180, bbox_inches="tight")
+    plt.close()
+    msg(f"✅ Saved → {out_plot}")
+
+
+# ── Combined RF+LR across all input types ──────────────────────────────────
+def process_combined_rf_lr(rf_all_files, lr_all_files, out_plot, out_csv):
+    msg("\n📊 Combined RF+LR — all input types")
+
+    drug_features = {}
+    drug_imp = {}  # store max importance per gene
+
+    for drug in drugs:
+        combined = {}
+        for files_dict, model_name in zip([rf_all_files, lr_all_files], ["RF", "LR"]):
+            for files in files_dict:
+                try:
+                    df = pd.read_csv(files[drug])
+                    if df.empty or "gene_name" not in df.columns:
+                        continue
+                    grouped = df.groupby("gene_name")["importance"].max()
+                    for g, v in grouped.items():
+                        if g not in combined or v > combined[g][0]:
+                            combined[g] = (v, model_name)
+                except:
+                    continue
+        drug_features[drug] = set(combined.keys())
+        drug_imp[drug] = combined
+
+    all_genes = set().union(*drug_features.values())
+
+    # Membership table
+    records = []
+    for gene in all_genes:
+        membership = {d: gene in drug_features[d] for d in drugs}
+        n_present = sum(membership.values())
+        imp_max = max([drug_imp[d][gene][0] for d in drugs if gene in drug_imp[d]])
+        best_models = ','.join([drug_imp[d][gene][1] for d in drugs if gene in drug_imp[d]])
+        records.append({
+            "gene": gene,
+            "n_drugs": n_present,
+            "importance_max": round(imp_max,5),
+            **{f"in_{d}": membership[d] for d in drugs},
+            "best_model": best_models
+        })
+
+    feat_df = pd.DataFrame(records).sort_values(
+        ["importance_max", "n_drugs"], ascending=[False, False]
+    )
+    feat_df.to_csv(out_csv, index=False)
+
+    # Venn
+    venn_dict = {d: drug_features[d] for d in drugs}
+    plt.figure(figsize=(10, 10))
+    venn(venn_dict)
+    plt.title("Combined RF+LR — all input types", fontsize=13)
+
+    common_genes = [g for g in all_genes if all(g in drug_features[d] for d in drugs)]
+    shared_genes = [g for g in all_genes if sum(g in drug_features[d] for d in drugs) >= 2 and g not in common_genes]
+
+    common_annot = [f"• {g} ({max([drug_imp[d][g][0] for d in drugs if g in drug_imp[d]]):.5f}, {','.join([d+'('+drug_imp[d][g][1]+')' for d in drugs if g in drug_features[d]])})" for g in common_genes[:8]]
+    shared_annot = [f"• {g} ({max([drug_imp[d][g][0] for d in drugs if g in drug_features[d]]):.5f}, {','.join([d+'('+drug_imp[d][g][1]+')' for d in drugs if g in drug_features[d]])})" for g in shared_genes[:12]]
+
+    annotation_text = []
+    if common_annot:
+        annotation_text.append("Shared in ALL drugs:")
+        annotation_text += common_annot
+    if shared_annot:
+        annotation_text.append("\nShared (≥2 drugs):")
+        annotation_text += shared_annot
+
+    if annotation_text:
+        plt.gcf().text(1.05, 0.2, "\n".join(annotation_text), fontsize=8, va="top")
+
+    plt.savefig(out_plot, dpi=180, bbox_inches="tight")
+    plt.close()
+    msg(f"✅ Saved → {out_plot}")
+
+
+# ── MAIN LOOP ───────────────────────────────────────────────────────────────
+for input_type in input_types:
+    msg(f"\n==============================")
+    msg(f"Processing input_type: {input_type}")
+    msg(f"==============================")
+
+    rf_files = [ml_dir / f"{input_type}_{d}_rf_features.csv" for d in drugs]
+    lr_files = [ml_dir / f"{input_type}_{d}_lr_features.csv" for d in drugs]
+
+    rf_plot = out_dir / f"{input_type}_rf_feature_venn.png"
+    lr_plot = out_dir / f"{input_type}_lr_feature_venn.png"
+
+    rf_csv  = out_dir / f"{input_type}_rf_feature_venn.csv"
+    lr_csv  = out_dir / f"{input_type}_lr_feature_venn.csv"
+
+    process_model(rf_files,'RF',rf_plot,rf_csv,input_type)
+    process_model(lr_files,'LR',lr_plot,lr_csv,input_type)
+
+# Combined RF only
+rf_all_files = [{d: ml_dir / f"{it}_{d}_rf_features.csv" for d in drugs} for it in input_types]
+process_combined_model(rf_all_files, 'RF', out_dir / "combined_rf_feature_venn.png",
+                       out_dir / "combined_rf_feature_venn.csv")
+
+# Combined LR only
+lr_all_files = [{d: ml_dir / f"{it}_{d}_lr_features.csv" for d in drugs} for it in input_types]
+process_combined_model(lr_all_files, 'LR', out_dir / "combined_lr_feature_venn.png",
+                       out_dir / "combined_lr_feature_venn.csv")
+
+# Combined RF+LR
+process_combined_rf_lr(rf_all_files, lr_all_files,
+                       out_dir / "combined_rf_lr_feature_venn.png",
+                       out_dir / "combined_rf_lr_feature_venn.csv")
+
+msg("\n🎉 ALL DONE")
