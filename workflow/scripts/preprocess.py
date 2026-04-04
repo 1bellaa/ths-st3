@@ -1,5 +1,5 @@
 """
-tbprofiler.py — Trim + Align + Variant Call per sample
+preprocess.py — Trim + Align + Variant Call per sample
 =======================================================
 Runs: Trimmomatic PE → BWA-MEM → samtools sort/index → bcftools mpileup|call
 Outputs a bgzipped + tabix-indexed VCF to snakemake.output.vcf/.tbi.
@@ -8,12 +8,6 @@ Cleans up trimmed FASTQs, SAM, and BAM internally after each step.
 Called as a Snakemake script (snakemake.* objects available).
 USES-SUBPROCESS: calls trimmomatic, bwa, samtools, bcftools, tabix via subprocess.
 All tools must be available inside workflow/envs/align.yaml conda environment.
-
-[FIXED] BWA and bcftools pipe steps now use subprocess.run(shell=True)
-        instead of os.system() so the conda env PATH is correctly inherited
-        and errors are captured properly.
-[FIXED] BWA index check added — gives a clear error if index files are missing
-        instead of cryptic exit 256.
 """
 
 import os
