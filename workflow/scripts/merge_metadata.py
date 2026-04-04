@@ -15,19 +15,7 @@ Two-file strategy:
 Join strategy (isolate name as anchor):
   accession (matrix row) → isolate name (via sample_isolate_map.tsv)
                          → resistance labels (via master_data.xlsx drug sheets)
-                         → country / ena_* cols (via metadata.xlsx)
-
-Memory-efficient changes vs original:
-  1. Feature matrices (SNP, pan, CARD) are loaded with dtype=np.int8.
-     Why: all values are 0/1 binary. int8 = 1 byte vs default int64 = 8 bytes.
-     For a 2484 × 50000 SNP matrix: int8 → 124 MB, int64 → 992 MB.
-     Labels columns (NaN-capable floats) are handled separately and are tiny.
- 
-  2. Each joined output DataFrame is deleted immediately after writing with `del`.
-     Why: without del, Python's GC may not free the joined copy before the next
-     join is built, causing peak RAM to hold multiple matrix copies at once.
- 
-  3. `combine()` uses concat on int8 matrices, which stays compact.                         
+                         → country / ena_* cols (via metadata.xlsx)                       
 
 Outputs:
   input_snp.csv       SNP features + labels + country
