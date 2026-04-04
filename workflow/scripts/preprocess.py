@@ -17,7 +17,7 @@ import shutil
 from pathlib import Path
 import gzip
 
-# ── Snakemake bindings ────────────────────────────────────────────────────────
+# Snakemake 
 sample     = snakemake.params.sample
 r1         = snakemake.input.r1
 r2         = snakemake.input.r2
@@ -28,14 +28,14 @@ log_file   = snakemake.log[0]
 threads    = snakemake.threads
 tmp_dir    = Path(snakemake.params.tmp_dir) / sample
 
-# ── Trimmomatic parameters ────────────────────────────────────────────────────
+# Trimmomatic parameters 
 LEADING       = snakemake.config.get("trimmomatic_leading",       3)
 TRAILING      = snakemake.config.get("trimmomatic_trailing",      3)
 SLIDINGWINDOW = snakemake.config.get("trimmomatic_slidingwindow", "4:20")
 MINLEN        = snakemake.config.get("trimmomatic_minlen",        25)
 ADAPTER_CFG   = snakemake.config.get("trimmomatic_adapter",       "TruSeq3-PE-2.fa")
 
-# ── Setup ─────────────────────────────────────────────────────────────────────
+# Setup 
 Path(log_file).parent.mkdir(parents=True, exist_ok=True)
 Path(output_vcf).parent.mkdir(parents=True, exist_ok=True)
 tmp_dir.mkdir(parents=True, exist_ok=True)
