@@ -1,14 +1,6 @@
 """
 Convert Panaroo gene_presence_absence.csv to a binary sample×gene matrix.
 Snakemake script — no subprocess calls.
-
-Memory-efficient chunked approach:
-  1. Read header once to get sample column names.
-  2. Pass 1 (cheap): scan only the gene-name index column to count n_genes.
-  3. Allocate a compact numpy uint8 matrix: n_samples × n_genes (~25 MB for 2484×10K).
-  4. Pass 2 (chunked): read 500 genes at a time, convert chunk to binary (uint8),
-     fill the numpy matrix in place. String data is freed after each chunk.
-  5. Write the transposed matrix (samples as rows) row-by-row to CSV.
 """
 
 import csv
