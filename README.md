@@ -632,7 +632,7 @@ This pipeline is *made possible due to many execellent tools*, namely:
 
 - **TBDB**: Phelan, J. TBDB: Standard database for the TBProfiler tool. GitHub repository. 2024. https://github.com/jodyphelan/tbdb
 
-- **Bakta DB**: [insert]
+- **Bakta DB**: Schwengers, O. Bakta database. 2025. https://doi.org/10.5281/zenodo.14916843
 
 
 ## FAQ
