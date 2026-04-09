@@ -637,7 +637,9 @@ rule plot_combined_roc:
         rf_roc_data = ML_DIR / "{input_type}_{drug}_rf_roc_data.csv",
         lr_roc_data = ML_DIR / "{input_type}_{drug}_lr_roc_data.csv",
     output:
-        combined_roc = ML_DIR / "{input_type}_{drug}_combined_roc.png",
+        combined_roc    = ML_DIR / "{input_type}_{drug}_combined_roc.png",
+        combined_roc_rf = ML_DIR / "{input_type}_{drug}_combined_roc_rf.png",
+        combined_roc_lr = ML_DIR / "{input_type}_{drug}_combined_roc_lr.png",
     params:
         drug       = "{drug}",
         input_type = "{input_type}",
@@ -683,19 +685,25 @@ rule annotate_features:
     #conda: "workflow/envs/ml.yaml"
     script: "workflow/scripts/annotate_features.py"
 
-rule plot_feature_venn:
+rule plot_combined_feature_venn:
     input:
-        feature_files = expand(str(ML_DIR / "{{input_type}}_{drug}_rf_features.csv"), drug=DRUGS)
+        rf_files = expand(str(ML_DIR / "{input_type}_{drug}_rf_features.csv"), input_type=INPUT_TYPES, drug=DRUGS),
+        lr_files = expand(str(ML_DIR / "{input_type}_{drug}_lr_features.csv"), input_type=INPUT_TYPES, drug=DRUGS),
     output:
-        venn_plot = RESULTS_DIR / "plots" / "{input_type}_rf_feature_venn.png",
-        venn_csv  = RESULTS_DIR / "plots" / "{input_type}_rf_feature_venn.csv"
+        combined_rf_venn     = RESULTS_DIR / "plots" / "combined_rf_feature_venn.png",
+        combined_rf_csv      = RESULTS_DIR / "plots" / "combined_rf_feature_venn.csv",
+        combined_lr_venn     = RESULTS_DIR / "plots" / "combined_lr_feature_venn.png",
+        combined_lr_csv      = RESULTS_DIR / "plots" / "combined_lr_feature_venn.csv",
+        combined_rf_lr_venn  = RESULTS_DIR / "plots" / "combined_rf_lr_feature_venn.png",
+        combined_rf_lr_csv   = RESULTS_DIR / "plots" / "combined_rf_lr_feature_venn.csv",
     params:
-        model      = "rf",
-        input_type = "{input_type}",
-        drugs      = DRUGS
-    log: LOGS_DIR / "plots" / "{input_type}_feature_venn.log"
+        input_types = INPUT_TYPES,
+        drugs       = DRUGS,
+        ml_dir      = str(ML_DIR),
+        out_dir     = str(RESULTS_DIR / "plots"),
+    log: LOGS_DIR / "plots" / "combined_feature_venn.log"
     #conda: "workflow/envs/ml.yaml"
-    script: "workflow/scripts/plot_feature_venn.py"
+    script: "workflow/scripts/plot_combined_feature_venn.py"
 
 rule plot_roc_by_input:
     input:
