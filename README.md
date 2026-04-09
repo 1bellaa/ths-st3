@@ -36,10 +36,10 @@ Seven feature matrices are constructed for comparative analysis:
 1. **SNP only** — Core genome variation
 2. **Pangenome only** — Accessory genome variation
 3. **SNP + Pangenome** — Combined chromosomal features
-4. **CARD only** — Known AMR genes
-5. **SNP + CARD** — Point mutations + AMR genes
-6. **Pangenome + CARD** — Accessory genes + AMR genes  
-7. **SNP + Pangenome + CARD** — Complete feature set
+4. **Resistome only** — Known AMR genes
+5. **SNP + Resistome** — Point mutations + AMR genes
+6. **Pangenome + Resistome** — Accessory genes + AMR genes  
+7. **SNP + Pangenome + Resistome** — Complete feature set
 
 This design allows evaluation of: (a) core vs. accessory gene mechanisms, (b) known vs. novel resistance determinants, and (c) effects of combined features.
 
@@ -59,14 +59,14 @@ Top predictive features are mapped to functional context:
 
 - **SNP features**: Annotated with gene names from TB Drug Resistance Database (TBDB)
 - **Pangenome features**: Annotated with gene names and functional descriptions from Panaroo
-- **CARD features**: Annotated with ARO identifiers from CARD database
+- **esistome features**: Annotated with ARO identifiers from CARD database
 
 ### Fast
 
 Preprocessing optimized for high-throughput analysis with automatic cleanup of intermediate files. Typical runtimes on a laptop (4 cores, 16 GB RAM):
 - Variant calling: ~X min/sample
-- CARD screening: ~X min/sample  
-- De novo assembly: ~X min/sample
+- Resistome screening: ~X min/sample  
+- _De novo_ assembly: ~X min/sample
 
 Storage management via Snakemake temp() directives automatically removes raw FASTQs, alignment BAMs, and assembly intermediates after downstream processing.
 
@@ -79,7 +79,7 @@ Storage management via Snakemake temp() directives automatically removes raw FAS
 
 ### Comprehensive Output
 
-- Filtered feature matrices (SNP, pangenome, CARD)
+- Filtered feature matrices (SNP, pangenome, Resistome)
 - Per-drug performance metrics (ROC AUC, sensitivity, specificity)
 - Feature importance rankings with biological annotations
 - ROC curves comparing models and feature types
@@ -113,11 +113,12 @@ tb_pipeline/
     │   ├── card_screen.py
     │   ├── filter_matrix.py          # Filters the SNP and pangenome matrix before merging
     │   ├── summarize_card.py
-    │   ├── tbprofiler.py             # Run the SNP preprocessing   
-    │   └── run_ml.py                 # RF + LR training & plots 
+    │   ├── preprocess.py             # Run the SNP preprocessing   
+    │   └── run_ml.py                 # RF + LR training & plots
+    │   └── plot_feature_venn.py               
+    │   └── plot_combined_roc.py                
     └── envs/
         ├── download.yaml
-        ├── trim.yaml
         ├── align.yaml
         ├── card.yaml
         ├── assembly.yaml
@@ -322,7 +323,7 @@ snakemake --cores 8 --use-conda --keep-going
 
 ### Cluster Execution (HPC)
 
-To run the pipeline on an HPC cluster using SLURM, we use a wrapper script to submit the entire Snakemake workflow as a single batch job.
+To run the pipeline on an DOST-ASTI HPC cluster using SLURM, we use a wrapper script to submit the entire Snakemake workflow as a single batch job.
 
 #### 1. The Submission Script
 Create a file (e.g., `run_snakemake.sbatch`) with your cluster configurations. This script loads the environment and executes Snakemake across the allocated cores.
@@ -387,7 +388,7 @@ ENA Download → Quality Trimming → Alignment/Assembly → Feature Matrices �
 - BCFtools: Variant calling (mapping quality ≥30, base quality ≥20)
 - Output: bgzipped + tabix-indexed VCF
 
-**3. CARD Screening** (`card_screen`, `summarize_card`)
+**3. CARD Screening** (`summarize_card`)
 - Bowtie2: Alignment to CARD database (very-sensitive-local)
 - SAMtools: Calculate per-gene coverage
 - Detection threshold: ≥80% coverage, ≥5× mean depth
@@ -414,7 +415,7 @@ ENA Download → Quality Trimming → Alignment/Assembly → Feature Matrices �
 **7. Feature Matrix Construction**
 - SNP matrix: Parse VCFs, build binary matrix
 - Pangenome matrix: Convert Panaroo output
-- Filter by frequency: SNP (0.5-99.5%), genes (1-99%)
+- Filter by frequency: SNP (>0.5%), genes (1-99%)
 
 **8. Metadata Merging** (`merge_metadata`)
 - Map accessions → isolate names (handles ENA/SRA mismatches)
@@ -513,7 +514,7 @@ trimmomatic_minlen: 25
 
 # ========== FEATURE FILTERING ==========
 snp_maf_min: 0.005      # 0.5%
-snp_maf_max: 0.995      # 99.5%
+snp_maf_max: 1.0        # 100%
 pangenome_maf_min: 0.01 # 1%
 pangenome_maf_max: 0.99 # 99%
 
@@ -524,12 +525,21 @@ rf_n_iter: 20
 lr_n_iter: 20
 
 # ========== COMPUTATIONAL RESOURCES ==========
-tbprofiler_threads: 4
-bowtie2_threads: 4
-spades_threads: 8
-bakta_threads: 4
-panaroo_threads: 8
-ml_threads: 4
+preprocess_mem_mb: 4000 
+card_mem_mb:       4000 
+matrix_mem_mb:     4000
+spades_mem_mb:    8000 
+bakta_mem_mb:     8000 
+panaroo_mem_mb:   16000
+
+download_threads:   4
+preprocess_threads: 4
+bowtie2_threads:    4
+spades_threads:     4 
+bakta_threads:      8
+panaroo_threads:    8
+matrix_threads:     4
+ml_threads:         4
 
 # ========== SKIP FLAGS ==========
 skip_assembly: false
@@ -549,7 +559,7 @@ spades_threads: 4
 
 **High Performance cluster**:
 ```yaml
-tbprofiler_threads: 16
+preprocess_threads: 16
 spades_threads: 32
 panaroo_threads: 16
 ```
@@ -633,6 +643,6 @@ This pipeline is *made possible due to many execellent tools*, namely:
 
 **Developed by**: Rachel Lauren Manlapig, Andrea Euceli Loria
 **Institution**: De La Salle University 
-**Contact**: X, andreae.loria@gmail.com 
+**Contact**: rachelmanlapig.acads@gmail.com, andreae.loria@gmail.com 
 **License**: ??   
 **Documentation**: https://github.com/1bellaa/ths-st3.git
