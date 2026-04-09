@@ -638,7 +638,7 @@ This pipeline is *made possible due to many execellent tools*, namely:
 ## FAQ
 
 ## Information
-
+pls add acknowledgment to DOST ASTI
 ---
 
 **Developed by**: Rachel Lauren Manlapig, Andrea Euceli Loria
