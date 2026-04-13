@@ -633,11 +633,10 @@ This pipeline is *made possible due to many execellent tools*, namely:
 
 - **Bakta DB**: Schwengers, O. Bakta database. 2025. https://doi.org/10.5281/zenodo.14916843
 
-
-## FAQ
-
 ## Information
-pls add acknowledgment to DOST ASTI
+
+The preprocessing of the genome data and running of the machine learning models were made possible by the Computing and Archiving Research Environment (COARE) service provided by the Department of Science and Technology's Advanced Science and Technology (DOST-ASTI). Using the High-Performance Computing (HPC) service of the organization made the processing significantly faster, given the limited computational resources of the group. Their service in addressing our requests are appreciated by the group.
+
 ---
 
 **Developed by**: Rachel Lauren Manlapig, Andrea Euceli Loria
