@@ -110,7 +110,6 @@ tb_pipeline/
     │   ├── build_matrix.py           # SNP binary matrix builder
     │   ├── build_pangenome_matrix.py # Panaroo → binary matrix
     │   ├── merge_metadata.py         # Attach resistance labels
-    │   ├── card_screen.py
     │   ├── filter_matrix.py          # Filters the SNP and pangenome matrix before merging
     │   ├── summarize_card.py
     │   ├── preprocess.py             # Run the SNP preprocessing   
