@@ -650,41 +650,6 @@ rule plot_combined_roc:
     script:
         "workflow/scripts/plot_combined_roc.py"
 
-rule plot_model_summary:
-    input:
-        metrics_files = expand(
-            str(ML_DIR / "{{input_type}}_{drug}_{model}_metrics.csv"),
-            drug=DRUGS, model=["rf", "lr"],
-        ),
-    output:
-        summary_plot = ML_DIR / "{input_type}_model_summary.png",
-    params:
-        input_type = "{input_type}",
-        drugs      = DRUGS,
-    log:
-        LOGS_DIR / "ml" / "{input_type}_model_summary.log",
-    # conda:
-    #     "tb_ml"
-    script:
-        "workflow/scripts/plot_model_summary.py"
-
-rule annotate_features:
-    input:
-        feature_files = expand(
-            str(ML_DIR / "{it}_{drug}_rf_features.csv"),
-            it=ML_INPUT_TYPES, drug=DRUGS,
-        ),
-    output:
-        annotated_csv   = ML_DIR / "annotated_features.csv",
-        annotation_plot = ML_DIR / "annotation_summary.png",
-    params:
-        tbdb_bed       = config.get("tbdb_bed",       "reference/tbdb/tbdb.bed"),
-        pan_gene_table = str(RESULTS_DIR / "pangenome" / "gene_presence_absence.csv")
-                         if not SKIP_PANGENOME else None,
-    log:   LOGS_DIR / "annotate_features.log"
-    #conda: "workflow/envs/ml.yaml"
-    script: "workflow/scripts/annotate_features.py"
-
 rule plot_combined_feature_venn:
     input:
         rf_files = expand(str(ML_DIR / "{input_type}_{drug}_rf_features.csv"), input_type=INPUT_TYPES, drug=DRUGS),
@@ -704,32 +669,6 @@ rule plot_combined_feature_venn:
     log: LOGS_DIR / "plots" / "combined_feature_venn.log"
     #conda: "workflow/envs/ml.yaml"
     script: "workflow/scripts/plot_combined_feature_venn.py"
-
-rule plot_roc_by_input:
-    input:
-        roc_files = expand(str(ML_DIR / "{it}_{{drug}}_{model}_roc_data.csv"), 
-                           it=ML_INPUT_TYPES, model=["rf", "lr"])
-    output:
-        plot = RESULTS_DIR / "plots" / "{drug}_roc_by_input_type.png"
-    params:
-        drug        = "{drug}",
-        input_types = ML_INPUT_TYPES
-    log: LOGS_DIR / "plots" / "{drug}_roc_by_input.log"
-    #conda: "workflow/envs/ml.yaml"
-    script: "workflow/scripts/plot_roc_by_input_type.py"
-
-rule plot_data_dist:
-    input:
-        input_files = expand(str(ML_DIR / "input_{it}.csv"), it=ML_INPUT_TYPES)
-    output:
-        plot = RESULTS_DIR / "plots" / "{drug}_data_distribution.png"
-    params:
-        drug        = "{drug}",
-        input_types = ML_INPUT_TYPES,
-        random_state = config.get("random_state", 42)
-    log: LOGS_DIR / "plots" / "{drug}_data_dist.log"
-    conda: "workflow/envs/ml.yaml"
-    script: "workflow/scripts/plot_data_distribution.py"
 
 onsuccess:
     print("\n🎉 Pipeline completed successfully!")

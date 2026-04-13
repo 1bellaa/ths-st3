@@ -80,13 +80,10 @@ Storage management via Snakemake temp() directives automatically removes raw FAS
 ### Comprehensive Output
 
 - Filtered feature matrices (SNP, pangenome, Resistome)
-- Per-drug performance metrics (ROC AUC, sensitivity, specificity)
+- Per-drug performance metrics (ROC-AUC, sensitivity, specificity)
 - Feature importance rankings with biological annotations
 - ROC curves comparing models and feature types
 - Hyperparameter optimization results
-
-
-
 
 ## Directory Structure
 ```
@@ -110,7 +107,6 @@ tb_pipeline/
     │   ├── build_matrix.py           # SNP binary matrix builder
     │   ├── build_pangenome_matrix.py # Panaroo → binary matrix
     │   ├── merge_metadata.py         # Attach resistance labels
-    │   ├── card_screen.py
     │   ├── filter_matrix.py          # Filters the SNP and pangenome matrix before merging
     │   ├── summarize_card.py
     │   ├── preprocess.py             # Run the SNP preprocessing   
@@ -168,10 +164,10 @@ tb-profiler update_tbdb
 
 # Copy to pipeline directory
 mkdir -p reference/tbdb
-cp ~/.tb_profiler/tbdb.fasta reference/tbdb/tbdb.fasta
+cp ~/.tb_profiler/tbdb.bed reference/tbdb/tbdb.bed
 
 # Index with BWA
-bwa index reference/tbdb/tbdb.fasta
+bwa index reference/tbdb/tbdb.bed
 ```
 
 ### CARD Database
@@ -491,7 +487,7 @@ Edit `config.yaml` before running:
 
 ```yaml
 # ========== FILE PATHS ==========
-reference_genome: "reference/tbdb/tbdb.fasta"
+reference_genome: "reference/tbdb/tbdb.bed"
 card_bowtie2_index: "db/card/card"
 card_lengths: "db/card/card_lengths.txt"
 bakta_db: "db/bakta_db"
