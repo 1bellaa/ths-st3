@@ -227,6 +227,12 @@ def plot_targets():
     for it in ML_INPUT_TYPES:
         out.append(str(RESULTS_DIR / "plots" / f"{it}_rf_feature_venn.png"))
     out.append(str(ML_DIR / "annotated_features.csv"))
+    out += [
+        str(ML_DIR / "combined_rf_single_features.png"),
+        str(ML_DIR / "combined_rf_combo_features.png"),
+        str(ML_DIR / "combined_lr_single_features.png"),
+        str(ML_DIR / "combined_lr_combo_features.png"),
+    ]
     return out
 
 # ==================== RULE ALL ====================
@@ -649,6 +655,47 @@ rule plot_combined_roc:
     #    "tb_ml"
     script:
         "workflow/scripts/plot_combined_roc.py"
+
+rule replot_feature_importance:
+    input:
+        feature_csvs = expand(
+            str(ML_DIR / "{input_type}_{drug}_{model}_features.csv"),
+            input_type = ML_INPUT_TYPES,
+            drug       = DRUGS,
+            model      = ["rf", "lr"],
+        ),
+        tbdb_bed       = config.get("tbdb_bed", "reference/tbdb/tbdb.bed"),
+        pan_gene_table = (
+            str(RESULTS_DIR / "pangenome" / "gene_presence_absence.csv")
+            if not SKIP_PANGENOME else []
+        ),
+    output:
+        combined_rf_single = ML_DIR / "combined_rf_single_features.png",
+        combined_rf_combo  = ML_DIR / "combined_rf_combo_features.png",
+        combined_lr_single = ML_DIR / "combined_lr_single_features.png",
+        combined_lr_combo  = ML_DIR / "combined_lr_combo_features.png",
+    params:
+        feature_dir    = str(ML_DIR),
+        plot_dir       = str(ML_DIR),
+        tbdb_bed       = config.get("tbdb_bed",  None),
+        h37rv_gff      = config.get("h37rv_gff", None),
+        pan_gene_table = (
+            str(RESULTS_DIR / "pangenome" / "gene_presence_absence.csv")
+            if not SKIP_PANGENOME else None
+        ),
+        input_types    = ML_INPUT_TYPES,
+        drugs          = DRUGS,
+        models         = ["rf", "lr"],
+        dpi            = config.get("replot_dpi", 200),
+    log:
+        LOGS_DIR / "replot_feature_importance.log",
+    threads: 1
+    resources:
+        mem_mb = config.get("replot_mem_mb", 4000),
+    conda:
+        "tb_ml"
+    script:
+        "workflow/scripts/replot_feature_importance.py"
 
 rule plot_combined_feature_venn:
     input:
